@@ -99,7 +99,8 @@ def dev_resolve(major, minor, _cache = dict(), _cache_time=600):
 		if dev_cached: dev_cached = dev_cached.replace('.', '_')
 		return dev_cached
 
-def process_entry(entry):
+def process_entry( entry,
+		_sector_bytes=512 ):
 	# Timestamp
 	ts = entry.pop('timestamp')
 	interval = ts['interval']
@@ -120,7 +121,12 @@ def process_entry(entry):
 			prefix = ['disk', 'load', dev]
 			metrics.extend([
 				(prefix + ['utilization'], disk['util-percent']),
-				(prefix + ['queue_len'], disk['avgqu-sz']) ])
+				(prefix + ['req_size'], disk['avgrq-sz']),
+				(prefix + ['queue_len'], disk['avgqu-sz']),
+				(prefix + ['bytes_read'], _sector_bytes * disk['rd_sec']),
+				(prefix + ['bytes_write'], _sector_bytes * disk['wr_sec']),
+				(prefix + ['serve_time'], disk['await']),
+				(prefix + ['tps'], disk['tps']) ])
 	if entry: log.warn('Unprocessed info left in sadf entry: {!r}'.format(entry))
 	return ts, interval, metrics
 
