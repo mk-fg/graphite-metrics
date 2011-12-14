@@ -8,6 +8,7 @@ parser.add_argument('-p', '--port',
 	type=int, default=2003, help='Carbon line-receiver (tcp) port (default: %(default)s).')
 parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')
 parser.add_argument('--debug', action='store_true', help='Dump a lot of debug info.')
+parser.add_argument('--debug-data', action='store_true', help='Dump processed datapoints.')
 optz = parser.parse_args()
 
 import logging
@@ -190,7 +191,7 @@ def read_data( ts_to=None, max_past_days=7,
 		# Update xattr timestamp, if any entries were processed
 		if sa_ts_max:
 			log.debug('Updating xattr timestamp to {}'.format(sa_ts_max))
-			if optz.dry_run: sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
+			if not optz.dry_run: sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
 
 
 def dispatch_data(remote, data):
@@ -198,7 +199,7 @@ def dispatch_data(remote, data):
 	link = CarbonClient(remote)
 	for name, val, ts in data:
 		metric = '.'.join(name), val, int(ts)
-		log.debug('Dispatching metric: {} {} {}'.format(*metric))
+		if optz.debug_data: log.debug('Dispatching metric: {} {} {}'.format(*metric))
 		if not optz.dry_run: link.send(*metric)
 	log.debug('Severing carbon server link')
 	link.close()
