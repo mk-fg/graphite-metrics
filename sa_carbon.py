@@ -99,8 +99,8 @@ def dev_resolve(major, minor, _cache = dict(), _cache_time=600):
 		if dev_cached: dev_cached = dev_cached.replace('.', '_')
 		return dev_cached
 
-def process_entry( entry,
-		_sector_bytes=512 ):
+def process_entry(entry, _sector_bytes=512):
+
 	# Timestamp
 	ts = entry.pop('timestamp')
 	interval = ts['interval']
@@ -108,6 +108,7 @@ def process_entry( entry,
 		(strptime('{} {}'.format(ts['date'], ts['time']), '%Y-%m-%d %H-%M-%S'))
 	# Metrics
 	metrics = list()
+
 	if 'disk' in entry:
 		for disk in entry.pop('disk'):
 			dev_sadf = disk['disk-device']
@@ -123,11 +124,64 @@ def process_entry( entry,
 				(prefix + ['utilization'], disk['util-percent']),
 				(prefix + ['req_size'], disk['avgrq-sz']),
 				(prefix + ['queue_len'], disk['avgqu-sz']),
-				(prefix + ['bytes_read'], float(_sector_bytes * disk['rd_sec']) / interval),
-				(prefix + ['bytes_write'], float(_sector_bytes * disk['wr_sec']) / interval),
+				(prefix + ['bytes_read'], _sector_bytes * disk['rd_sec']),
+				(prefix + ['bytes_write'], _sector_bytes * disk['wr_sec']),
 				(prefix + ['serve_time'], disk['await']),
 				(prefix + ['tps'], disk['tps']) ])
-	if entry: log.warn('Unprocessed info left in sadf entry: {!r}'.format(entry))
+
+	if 'paging' in entry:
+		stats = entry.pop('paging')
+		metrics.append((['memory', 'pages', 'vm_efficiency'], stats['vmeff-percent']))
+
+	if 'kernel' in entry:
+		stats = entry.pop('kernel')
+		metrics.extend([
+			(['misc', 'dent_unused'], stats['dentunusd']),
+			(['misc', 'file_handles'], stats['file-nr']),
+			(['misc', 'inode_handles'], stats['inode-nr']),
+			(['misc', 'pty'], stats['pty-nr']) ])
+
+	if 'network' in entry:
+		stats = entry.pop('network')
+		iface_stats = stats.get('net-dev', list())
+		for iface in iface_stats:
+			prefix = ['network', 'interfaces', iface['iface']]
+			metrics.extend([
+				(prefix + ['rx', 'bytes'], iface['rxkB'] * 2**10),
+				(prefix + ['rx', 'packets', 'total'], iface['rxpck']),
+				(prefix + ['rx', 'packets', 'compressed'], iface['rxcmp']),
+				(prefix + ['rx', 'packets', 'multicast'], iface['rxmcst']),
+				(prefix + ['tx', 'bytes'], iface['txkB'] * 2**10),
+				(prefix + ['tx', 'packets', 'total'], iface['txpck']),
+				(prefix + ['tx', 'packets', 'compressed'], iface['txpck']) ])
+		iface_stats = stats.get('net-edev', list())
+		iface_errs_common = [('err', 'total'), ('fifo', 'overflow_fifo'), ('drop', 'overflow_kbuff')]
+		for iface in iface_stats:
+			prefix = ['network', 'interfaces', iface['iface']]
+			for src,dst in iface_errs_common + [('fram', 'frame_alignment')]:
+				metrics.append((prefix + ['rx', 'errors', dst], iface['rx{}'.format(src)]))
+			for src,dst in iface_errs_common + [('carr', 'carrier')]:
+				metrics.append((prefix + ['tx', 'errors', dst], iface['tx{}'.format(src)]))
+			metrics.append((prefix + ['tx', 'errors', 'collision'], iface['coll']))
+		if 'net-nfs' in stats:
+			for k,v in stats['net-nfs'].viewitems():
+				metrics.append((['network', 'nfs', 'client', k], v))
+			for k,v in stats['net-nfsd'].viewitems():
+				metrics.append((['network', 'nfs', 'server', k], v))
+		if 'net-sock' in stats:
+			for k,v in stats['net-sock'].viewitems():
+				if k.endswith('sck'):
+					k = k[:-3]
+					if k == 'tot': k = 'total'
+					metrics.append((['network', 'sockets', k], v))
+
+	if 'power-management' in entry:
+		stats = entry.pop('power-management')
+		for metric in stats['temperature']:
+			metrics.append((
+				['sensors', 'temperature', metric['device'].replace('.', '_')],
+				metric['degC'] ))
+
 	return ts, interval, metrics
 
 def read_data( ts_to=None, max_past_days=7,
@@ -169,7 +223,7 @@ def read_data( ts_to=None, max_past_days=7,
 		proc = ['sadf', '-jt']
 		if sa_ts_from: proc.extend(['-s', sa_ts_from.strftime('%H:%M:%S')])
 		if sa_ts_to: proc.extend(['-e', sa_ts_to.strftime('%H:%M:%S')])
-		proc.extend(['--', '-d']) # only disk stats for now
+		proc.extend(['--', '-A'])
 		proc.append(sa)
 		log.debug('sadf command: {}'.format(proc))
 		proc = Popen(proc, stdout=PIPE)
