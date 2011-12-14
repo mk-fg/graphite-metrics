@@ -4,8 +4,10 @@
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('host', help='Carbon host to send data to.')
-parser.add_argument('-p', '--port',
-	type=int, default=2003, help='Carbon line-receiver (tcp) port (default: %(default)s).')
+parser.add_argument('-p', '--port', type=int, default=2003,
+	help='Carbon line-receiver (tcp) port (default: %(default)s).')
+parser.add_argument('-i', '--force-interval', type=int,
+	help='Discard datapoints for intervals (with a warning), different from this one.')
 parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')
 parser.add_argument('--debug', action='store_true', help='Dump a lot of debug info.')
 parser.add_argument('--debug-data', action='store_true', help='Dump processed datapoints.')
@@ -182,6 +184,10 @@ def read_data( ts_to=None, max_past_days=7,
 					' mismatch: name={}, data={}, file={}'.format(sa_day, sa_day_data, sa) )
 			# Read the data
 			for ts, interval, metrics in it.imap(process_entry, data['statistics']):
+				if optz.force_interval and interval != optz.force_interval:
+					log.warn( 'Dropping sample because of interval mismatch'
+						' (interval: {}, required: {})'.format(interval, optz.force_interval) )
+					continue
 				for name, val in metrics:
 					name = [host] + list(name)
 					yield name, val, ts
