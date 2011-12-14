@@ -123,8 +123,8 @@ def process_entry( entry,
 				(prefix + ['utilization'], disk['util-percent']),
 				(prefix + ['req_size'], disk['avgrq-sz']),
 				(prefix + ['queue_len'], disk['avgqu-sz']),
-				(prefix + ['bytes_read'], _sector_bytes * disk['rd_sec']),
-				(prefix + ['bytes_write'], _sector_bytes * disk['wr_sec']),
+				(prefix + ['bytes_read'], float(_sector_bytes * disk['rd_sec']) / interval),
+				(prefix + ['bytes_write'], float(_sector_bytes * disk['wr_sec']) / interval),
 				(prefix + ['serve_time'], disk['await']),
 				(prefix + ['tps'], disk['tps']) ])
 	if entry: log.warn('Unprocessed info left in sadf entry: {!r}'.format(entry))
