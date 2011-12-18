@@ -102,7 +102,8 @@ def dev_resolve(major, minor, _cache = dict(), _cache_time=600):
 def process_entry(entry, _sector_bytes=512):
 
 	# Timestamp
-	ts = entry.pop('timestamp')
+	try: ts = entry.pop('timestamp')
+	except KeyError: return # happens, no idea what to do with these
 	interval = ts['interval']
 	ts = (mktime if not ts['utc'] else timegm)\
 		(strptime('{} {}'.format(ts['date'], ts['time']), '%Y-%m-%d %H-%M-%S'))
@@ -243,7 +244,8 @@ def read_data( ts_to=None, max_past_days=7,
 				raise ValueError( 'Sa name/data timestamp'
 					' mismatch: name={}, data={}, file={}'.format(sa_day, sa_day_data, sa) )
 			# Read the data
-			for ts, interval, metrics in it.imap(process_entry, data['statistics']):
+			for ts, interval, metrics in it.ifilter(
+					None, it.imap(process_entry, data['statistics']) ):
 				if optz.force_interval and interval != optz.force_interval:
 					log.warn( 'Dropping sample because of interval mismatch'
 						' (interval: {}, required: {})'.format(interval, optz.force_interval) )
