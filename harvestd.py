@@ -16,54 +16,87 @@ page_size = os.sysconf('SC_PAGE_SIZE')
 page_size_kb = page_size // 1024
 
 
-class MetricsdClient(object):
+class CarbonAggregator(object):
 
-	types = dict( counter=0x00, gauge=0x10,
-		histogram=0x20, meter=0x30, timer=0x40 )
-	actions = dict(update=0x00, clear=0x01, delete=0x02)
-	numerics = dict(it.izip( 'BbHhIiQqfd',
-		it.chain.from_iterable((i<<4, i<<4|1) for i in xrange(5)) ))
+	def __init__(self, host, remote, max_reconnects=None, reconnect_delay=5):
+		self.host, self.remote = host.replace('.', '_'), remote
+		if not max_reconnects or max_reconnects < 0: max_reconnects = None
+		self.max_reconnects = max_reconnects
+		self.reconnect_delay = reconnect_delay
+		self.connect()
 
-	def __init__(self, hostname, remote):
-		self.hostname, self.remote = hostname, remote
-		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	def connect(self):
+		reconnects = self.max_reconnects
+		while True:
+			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			try:
+				self.sock.connect(self.remote)
+				log.debug('Connected to Carbon at {}:{}'.format(*self.remote))
+				return
+			except socket.error, e:
+				if reconnects is not None:
+					reconnects -= 1
+					if reconnects <= 0: raise
+				log.info( 'Failed to connect to'
+					' {0[0]}:{0[1]}: {1}'.format(self.remote, e) )
+				if self.reconnect_delay: sleep(max(0, self.reconnect_delay))
 
-	def pack(self, action, datapoints, ts=None):
-		if not isinstance(action, int): action = self.actions[action]
-		if not ts: ts = time()
-		return ''.join(it.chain(
-			[chr(0xAA), self.pack_string(self.hostname)],
-			it.chain.from_iterable(it.imap(ft.partial(
-				self.pack_datapoint, action ), datapoints)) ))
-
-	def pack_datapoint(self, action, dp, ts=None):
-		name, mtype, val, ts = dp.name,\
-			dp.type if isinstance(dp.type, int) else self.types[dp.type],\
-			dp.value, dp.ts or ts or time()
-		chunks = [chr(mtype | action), self.pack_string(name)]
-		if action == self.actions['update']: chunks.append(self.pack_number(val))
-		return chunks
-
-	def pack_string(self, string):
-		if isinstance(string, unicode): string = string.encode('utf-8')
-		return struct.pack('!H', len(string)) + string + chr(0)
-
-	def pack_number(self, val, _pack_int='bhilq', _pack_float='fd'):
-		for ptype in (( _pack_int.upper() if val >= 0
-				else _pack_int ) if isinstance(val, int) else _pack_float):
-			try: val = struct.pack('!{}'.format(ptype), val)
-			except struct.error: continue
-			return chr(self.numerics[ptype]) + val
-		raise ValueError('Unable to pack value: {!r}'.format(val))
-
-	def send(self, ts, *datapoints):
-		self.sock.sendto(self.pack('update', datapoints, ts=ts), self.remote)
+	def reconnect(self):
+		self.close()
+		self.connect()
 
 	def close(self):
-		self.sock.close()
+		try: self.sock.close()
+		except: pass
 
 
-DataPoint = namedtuple('Value', 'name type value ts')
+	def pack(self, datapoints, ts=None):
+		return ''.join(it.imap(ft.partial(self.pack_datapoint, ts=ts), datapoints))
+
+	def pack_datapoint(self, dp, ts=None):
+		dp = dp.get(ts=ts)
+		if dp is None: return ''
+		name, value, ts = dp
+		return bytes('{} {} {}\n'.format(
+			'{}.{}'.format(self.host, name), value, int(ts) ))
+
+
+	def send(self, ts, *datapoints):
+		reconnects = self.max_reconnects
+		packet = self.pack(datapoints, ts=ts)
+		while True:
+			try:
+				self.sock.sendall(packet)
+				return
+			except socket.error as err:
+				if reconnects is not None:
+					reconnects -= 1
+					if reconnects <= 0: raise
+				log.error('Failed to send data to Carbon server: {}'.format(err))
+				self.reconnect()
+
+
+class DataPoint(namedtuple('Value', 'name type value ts')):
+	_counter_cache = dict()
+
+	def get(self, ts=None):
+		ts = self.ts or ts or time()
+		if self.type == 'counter':
+			if self.name not in self._counter_cache:
+				log.debug('Initializing bucket for new counter: {}'.format(self.name))
+				self._counter_cache[self.name] = self.value, ts
+				return None
+			v0, ts0 = self._counter_cache[self.name]
+			value = float(self.value - v0) / (ts - ts0)
+			self._counter_cache[self.name] = self.value, ts
+			if value < 0:
+				# TODO: handle overflows properly, w/ limits
+				log.debug( 'Detected counter overflow'
+					' (negative delta): {}, {} -> {}'.format(self.name, v0, self.value) )
+				return None
+		elif self.type == 'gauge': value = self.value
+		else: raise TypeError('Unknown type: {}'.format(self.type))
+		return self.name, value, ts
 
 
 class Collector(object): pass
@@ -299,8 +332,8 @@ class Collectors(object):
 def main():
 	import argparse
 	parser = argparse.ArgumentParser(
-		description='Collect and dispatch various metrics to metricsd daemon.')
-	parser.add_argument('remote', help='host:port of metricsd destination.')
+		description='Collect and dispatch various metrics to carbon daemon.')
+	parser.add_argument('remote', help='host:port of carbon destination.')
 	parser.add_argument('-i', '--interval', type=int, default=60,
 		help='Interval between datapoints (default: %(default)s).')
 	parser.add_argument('--debug', action='store_true', help='Verbose operation mode.')
@@ -308,10 +341,10 @@ def main():
 
 	logging.basicConfig(
 		level=logging.WARNING if not optz.debug else logging.DEBUG,
-		format='%(name)s: %(levelname)s %(message)s' )
+		format='%(levelname)s :: %(name)s :: %(message)s' )
 
 	host, port = optz.remote.split(':')
-	metricsc = MetricsdClient(os.uname()[1], (host, int(port)))
+	link = CarbonAggregator(os.uname()[1], (host, int(port)))
 
 	collectors = list(
 		collector() for collector in filter(
@@ -325,8 +358,10 @@ def main():
 			it.imap(op.methodcaller('read'), collectors) ))
 		ts_now = time()
 		log.debug('Sending {} datapoints'.format(len(data)))
-		metricsc.send(ts_now, *data)
+		link.send(ts_now, *data)
 		while ts < ts_now: ts += optz.interval
-		sleep(max(0, ts - time()))
+		ts_sleep = max(0, ts - time())
+		log.debug('Sleep: {}s'.format(ts_sleep))
+		sleep(ts_sleep)
 
 if __name__ == '__main__': main()
