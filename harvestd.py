@@ -224,7 +224,6 @@ def file_follow_durable( path,
 
 
 
-
 class Collector(object): pass
 
 class Collectors(object):
@@ -481,7 +480,6 @@ class Collectors(object):
 			('feedjack_update', r'\bfeedjack_update\.py\b'),
 			('_name', r'/etc/(\S+/)*(?P<name>\S+)(\s+|$)') ]
 
-
 		def __init__(self):
 			for k,v in self.lines.viewitems(): self.lines[k] = re.compile(v)
 			for idx,(k,v) in enumerate(self.aliases): self.aliases[idx] = k, re.compile(v)
@@ -515,6 +513,7 @@ class Collectors(object):
 							except IndexError: value = 1
 							# log.debug('TS: {}, EV: {}, JOB: {}'.format(ts, ev, job))
 							yield DataPoint('cron.tasks.{}.{}'.format(job, ev), 'gauge', value, ts)
+
 
 
 def main():
