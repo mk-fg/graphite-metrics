@@ -333,7 +333,7 @@ def main():
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Collect and dispatch various metrics to carbon daemon.')
-	parser.add_argument('remote', help='host:port of carbon destination.')
+	parser.add_argument('remote', help='host[:port] (default port: 2003) of carbon destination.')
 	parser.add_argument('-i', '--interval', type=int, default=60,
 		help='Interval between datapoints (default: %(default)s).')
 	parser.add_argument('--debug', action='store_true', help='Verbose operation mode.')
@@ -343,7 +343,9 @@ def main():
 		level=logging.WARNING if not optz.debug else logging.DEBUG,
 		format='%(levelname)s :: %(name)s :: %(message)s' )
 
-	host, port = optz.remote.split(':')
+	link = optz.remote.rsplit(':', 1)
+	if len(link) == 1: host, port = link[0], 2003
+	else: host, port = link
 	link = CarbonAggregator(os.uname()[1], (host, int(port)))
 
 	collectors = list(
