@@ -179,9 +179,9 @@ def process_entry(entry, _sector_bytes=512):
 	if 'power-management' in entry:
 		stats = entry.pop('power-management')
 		for metric in stats['temperature']:
-			metrics.append((
-				['sensors', 'temperature', metric['device'].replace('.', '_')],
-				metric['degC'] ))
+			name = ['sensors', 'temperature', metric['device'].replace('.', '_')]
+			if 'number' in metric: name.append(bytes(metric['number']))
+			metrics.append((name, metric['degC']))
 
 	return ts, interval, metrics
 
