@@ -478,6 +478,7 @@ class Collectors(object):
 			('forager_music', r'\bforager_music\.py\b'),
 			('forager_scm', r'\bforager_scm\.py\b'),
 			('feedjack_update', r'\bfeedjack_update\.py\b'),
+			('sync_distfiles', r'\bsync_distfiles\b'),
 			('_name', r'\bsystemd: \S+ (?P<name>\S+)\b'),
 			('_name', r'/etc/(\S+/)*(?P<name>\S+)(\s+|$)') ]
 
