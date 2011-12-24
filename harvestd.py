@@ -670,18 +670,18 @@ class Collectors(object):
 
 
 		@staticmethod
-		def _iostat(tid, _conv=dict( read_bytes=('r', 1),
+		def _iostat(pid, _conv=dict( read_bytes=('r', 1),
 				write_bytes=('w', 1), cancelled_write_bytes=('w', -1),
 				syscr=('rc', 1), syscw=('wc', 1) )):
 			res = dict()
-			for line in open('/proc/{}/io'.format(tid), 'rb'):
+			for line in open('/proc/{}/io'.format(pid), 'rb'):
 				name, val = line.split(':', 1)
 				try: k,m = _conv[name]
 				except KeyError: continue
 				if k not in res: res[k] = 0
 				res[k] += int(val.strip()) * m
 			# comm is used to make sure it's the same thread
-			return open('/proc/{}/comm'.format(tid), 'rb').read(),\
+			return open('/proc/{}/comm'.format(pid), 'rb').read(),\
 				op.itemgetter('r', 'w', 'rc', 'wc')(res)
 
 		def blkio( self, services, _caches=deque([dict()], maxlen=2),
@@ -689,6 +689,8 @@ class Collectors(object):
 			## Counters from blkio seem to be totally useless in their current state
 			## So /proc/*/io stats are collected for all threads in cgroup
 			## Should be very inaccurate if threads are respawning
+			cache_prev = _caches[-1]
+			cache_update = dict()
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('blkio', services) ):
 				try:
@@ -698,20 +700,21 @@ class Collectors(object):
 				# thread count - only collected here
 				yield Datapoint( 'processes.services.{}.threads'\
 					.format(self._svc_name(svc)), 'gauge', len(threads), None )
-				update = dict()
+				svc_update = list()
 				for tid in threads:
 					try: comm,res = self._iostat(tid)
 					except (OSError, IOError): continue
-					update[(svc, tid, comm)] = res
-				prev = _caches[-1]
-				_caches.append(update)
+					svc_update.append(((svc, tid, comm), res))
 				delta_total = list(it.repeat(0, 4))
-				for k,res in update.viewitems():
-					try: delta = map(op.sub, res, prev[k])
+				for k,res in svc_update:
+					try: delta = map(op.sub, res, cache_prev[k])
 					except KeyError: continue
 					delta_total = map(op.add, delta, delta_total)
+				log.debug(repr(delta_total))
 				for k,v in it.izip(['bytes_read', 'bytes_write', 'ops_read', 'ops_write'], delta_total):
 					yield Datapoint(_name(self._svc_name(svc), k), 'gauge', v, None)
+				cache_update.update(svc_update)
+			_caches.append(cache_update)
 
 
 		def memory( self, services,
