@@ -707,7 +707,8 @@ class Collectors(object):
 				# task count - only collected here
 				try:
 					with self._cg_metric(os.path.join(self._cg_svc_dir('cpuacct', svc), 'tasks')) as src:
-						yield Datapoint('processes.services.count', 'gauge', len(src.readlines()), None)
+						yield Datapoint('processes.services.{}.count'.format(
+							self._svc_name(svc) ), 'gauge', len(src.readlines()), None)
 				except (OSError, IOError): pass
 
 
