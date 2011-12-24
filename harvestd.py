@@ -10,11 +10,15 @@ import itertools as it, operator as op, functools as ft
 from collections import namedtuple
 from io import open
 from time import time, sleep
-import os, re, struct, socket, iso8601, calendar
+from glob import iglob
+import os, re, socket
+import iso8601, calendar
+import dbus, fcntl, stat
 
 
 page_size = os.sysconf('SC_PAGE_SIZE')
 page_size_kb = page_size // 1024
+user_hz = os.sysconf('SC_CLK_TCK')
 
 
 class CarbonAggregator(object):
@@ -78,11 +82,26 @@ class CarbonAggregator(object):
 
 
 
-class DataPoint(namedtuple('Value', 'name type value ts')):
+class Datapoint(namedtuple('Value', 'name type value ts')):
 	_counter_cache = dict()
+	_counter_cache_check_ts = 0
+	_counter_cache_check_timeout = 12 * 3600
+	_counter_cache_check_count = 4
+
+	def _counter_cache_cleanup(self, ts, to):
+		cleanup_list = list( k for k,(v,ts_chk) in
+			self._counter_cache.viewitems() if (ts - to) > ts_chk )
+		log.debug('Counter cache cleanup: {} buckets'.format(len(cleanup_list)))
+		for k in cleanup_list: del self._counter_cache[k]
 
 	def get(self, ts=None):
 		ts = self.ts or ts or time()
+		if ts > Datapoint._counter_cache_check_ts:
+			self._counter_cache_cleanup( ts,
+				self._counter_cache_check_timeout )
+			Datapoint._counter_cache_check_ts = ts\
+				+ self._counter_cache_check_timeout\
+				/ self._counter_cache_check_count
 		if self.type == 'counter':
 			if self.name not in self._counter_cache:
 				log.debug('Initializing bucket for new counter: {}'.format(self.name))
@@ -223,6 +242,28 @@ def file_follow_durable( path,
 			break
 
 
+def dev_resolve(major, minor, _cache = dict(), _cache_time=610):
+	ts_now = time()
+	while True:
+		if not _cache: ts = 0
+		else:
+			dev = major, minor
+			dev_cached, ts = (None, _cache[None])\
+				if dev not in _cache else _cache[dev]
+		# Update cache, if necessary
+		if ts_now > ts + _cache_time:
+			_cache.clear()
+			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
+				link_name = os.path.basename(link)
+				try: link_dev = os.stat(link).st_rdev
+				except OSError: continue # EPERM, EINVAL
+				_cache[(os.major(link_dev), os.minor(link_dev))] = link_name, ts_now
+			_cache[None] = ts_now
+			continue # ...and try again
+		if dev_cached: dev_cached = dev_cached.replace('.', '_')
+		return dev_cached
+
+
 
 class Collector(object): pass
 
@@ -283,7 +324,7 @@ class Collectors(object):
 							('slab_allocated', info.num_slabs * info.pagesperslab * ps) ]
 						if self.pass_zeroes or sum(it.imap(op.itemgetter(1), vals)) != 0:
 							for val_name, val in vals:
-								yield DataPoint( 'memory.slabs.{}.bytes_{}'\
+								yield Datapoint( 'memory.slabs.{}.bytes_{}'\
 									.format(info.name, val_name), 'gauge', val, None )
 
 
@@ -304,10 +345,10 @@ class Collectors(object):
 					metric, val = line.strip().split(None, 1)
 					val = int(val)
 					if metric.startswith('nr_'):
-						yield DataPoint( 'memory.pages.allocation.{}'\
+						yield Datapoint( 'memory.pages.allocation.{}'\
 							.format(metric[3:]), 'gauge', val, None )
 					else:
-						yield DataPoint( 'memory.pages.activity.{}'\
+						yield Datapoint( 'memory.pages.activity.{}'\
 							.format(metric), 'gauge', val, None )
 			# /proc/meminfo
 			with open('/proc/meminfo', 'rb') as table:
@@ -337,7 +378,7 @@ class Collectors(object):
 						log.warn('Unhandled unit type in /etc/meminfo: {}'.format(unit))
 						continue
 					val = int(val)
-				yield DataPoint( 'memory.allocation.{}'\
+				yield Datapoint( 'memory.allocation.{}'\
 					.format(metric), 'gauge', val * 1024, None )
 
 
@@ -352,7 +393,7 @@ class Collectors(object):
 					elif label == 'softirq': name = 'irq.total.soft'
 					elif label == 'processes': name = 'processes.forks'
 					else: continue # no more useful data here
-					yield DataPoint(name, 'counter', total, None)
+					yield Datapoint(name, 'counter', total, None)
 
 
 	class Memfrag(Collector):
@@ -416,7 +457,7 @@ class Collectors(object):
 					for mtype,counts in mtypes.viewitems():
 						if sum(counts.viewvalues()) == 0: continue
 						for size,count in counts.viewitems():
-							yield DataPoint( 'memory.fragmentation.{}'\
+							yield Datapoint( 'memory.fragmentation.{}'\
 									.format('.'.join(it.imap( bytes,
 										['node_{}'.format(node),zone,mtype,size] ))),
 								'gauge', count, None )
@@ -451,7 +492,7 @@ class Collectors(object):
 				for irq, counts in irqs.viewitems():
 					if sum(counts) == 0: continue
 					for bind, count in it.izip(bindings, counts):
-						yield DataPoint('irq.{}.{}'.format(irq, bind), 'counter', count, None)
+						yield Datapoint('irq.{}.{}'.format(irq, bind), 'counter', count, None)
 
 
 	class CronJobs(Collector):
@@ -514,7 +555,174 @@ class Collectors(object):
 							try: value = float(match.group('val'))
 							except IndexError: value = 1
 							# log.debug('TS: {}, EV: {}, JOB: {}'.format(ts, ev, job))
-							yield DataPoint('cron.tasks.{}.{}'.format(job, ev), 'gauge', value, ts)
+							yield Datapoint('cron.tasks.{}.{}'.format(job, ev), 'gauge', value, ts)
+
+
+	class CGAcct(Collector):
+
+		stuck_list = '/sys/fs/cgroup/sticky.cgacct'
+
+
+		def __init__(self):
+			# List of cgroup sticky bits, set by this service
+			self._stuck_list_file = open(self.stuck_list, 'ab+')
+			self._stuck_list = dict()
+			fcntl.lockf(self._stuck_list_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+			self._stuck_list_file.seek(0)
+			for line in self._stuck_list_file:
+				rc, svc = line.strip().split()
+				if rc not in self._stuck_list: self._stuck_list[rc] = set()
+				self._stuck_list[rc].add(svc)
+
+		_cg_svc_dir = staticmethod(
+			lambda rc, svc=None:\
+				os.path.join( '/sys/fs/cgroup', rc,
+					'system/{}.service'.format(svc) if svc else '' ) )
+		_cg_svc_metric = classmethod(
+			lambda cls, rc, metric, svc=None, svc_dir=None:\
+				os.path.join(
+					svc_dir or cls._cg_svc_dir(rc, svc),
+					'{}.{}'.format(rc, metric) ) )
+
+
+		@staticmethod
+		def _systemd_services():
+			for unit in dbus.Interface( dbus.SystemBus().get_object(
+						'org.freedesktop.systemd1', '/org/freedesktop/systemd1' ),
+					'org.freedesktop.systemd1.Manager' ).ListUnits():
+				name, state = it.imap(str, op.itemgetter(0, 4)(unit))
+				if name.endswith('.service') and state == 'running': yield name[:-8]
+
+		def _systemd_cg_stick(self, rc, services):
+			if rc not in self._stuck_list: self._stuck_list[rc] = set()
+			stuck_update, stuck = False, set(self._stuck_list[rc])
+			services = set(services) # will be filtered and returned
+			# Process services, make their cgroups persistent
+			for svc in list(services):
+				if svc not in stuck:
+					svc_tasks = os.path.join(self._cg_svc_dir(rc, svc), 'tasks')
+					try:
+						os.chmod( svc_tasks,
+							stat.S_IMODE(os.stat(svc_tasks).st_mode) | stat.S_ISVTX )
+					except OSError: services.discard(svc) # not running
+					else:
+						self._stuck_list[rc].add(svc)
+						stuck_update = True
+				else: stuck.remove(svc)
+			# Process stuck cgroups for removed services,
+			#  try dropping these, otherwise just unstick and forget
+			for svc in stuck:
+				svc_dir = self._cg_svc_dir(rc, svc)
+				try: os.rmdir(svc_dir)
+				except OSError:
+					svc_tasks = os.path.join(svc_dir, 'tasks')
+					try:
+						os.chmod( svc_tasks,
+							stat.S_IMODE(os.stat(svc_tasks).st_mode) & ~stat.S_ISVTX )
+					except OSError: pass
+				self._stuck_list[rc].remove(svc)
+				stuck_update = True
+			# Save list updates, if any
+			if stuck_update:
+				self._stuck_list_file.seek(0)
+				self._stuck_list_file.truncate()
+				for rc, stuck in self._stuck_list.viewitems():
+					for svc in stuck: self._stuck_list_file.write('{} {}\n'.format(rc, svc))
+				self._stuck_list_file.flush()
+			return services
+
+
+		def cpuacct( self, services,
+				_name = 'processes.services.{}.cpu.{}'.format ):
+			## "stats" counters (user/sys) are reported in USER_HZ - 1/Xth of second
+			##  yielded values are in seconds, so counter should have 0-1 range,
+			##  when divided by the interval
+			## Not parsed: usage (should be sum of percpu)
+			def parse_stat(svc=None):
+				try:
+					with open(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
+						return op.itemgetter('user', 'system')(dict(
+							(name, int(val)) for name, val in
+								(line.strip().split() for line in src) if name in ('user', 'system') ))
+				except (OSError, IOError): return None, None
+			# Totals
+			for name, val in it.izip(['user', 'sys'], parse_stat()):
+				if val is not None:
+					yield Datapoint( _name('total', name),
+						'counter', float(val) / user_hz, None )
+			try:
+				with open(self._cg_svc_metric('cpuacct', 'usage_percpu')) as src:
+					for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
+						if val is not None: yield Datapoint(_name('total', cpu), 'counter', val, None)
+			except (OSError, IOError): pass
+			# Services
+			for svc in set(services).difference(
+					self._systemd_cg_stick('cpuacct', services) ):
+				if svc == 'total':
+					log.warn('Detected service name conflict with "total" aggregation')
+					continue
+				# user/sys jiffies
+				for name, val in it.izip(['user', 'sys'], parse_stat(svc)):
+					if val is not None:
+						yield Datapoint( _name(svc, name),
+							'counter', float(val) / user_hz, None )
+				# percpu clicks
+				try:
+					with open(self._cg_svc_metric('cpuacct', 'usage_percpu', svc)) as src:
+						for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
+							if val is not None: yield Datapoint(_name(svc, cpu), 'counter', val, None)
+				except (OSError, IOError): pass
+				# task count - only collected here
+				try:
+					with open(os.path.join(self._cg_svc_dir('cpuacct', svc), 'tasks')) as src:
+						yield Datapoint( 'processes.services.count', 'gauge', len(src.readlines()), None )
+				except (OSError, IOError): pass
+
+
+		def blkio( self, services,
+				_name = 'processes.services.{}.io.{}'.format ):
+			for svc in set(services).difference(
+					self._systemd_cg_stick('blkio', services) ):
+				for src, suffix in [
+						('io_service_bytes', 'bytes'),
+						('io_merged', 'iops.merged'),
+						('io_serviced', 'iops.total') ]:
+					try:
+						with open(self._cg_svc_metric('blkio', src, svc)) as src:
+							for line in src:
+								try: dev, io, val = line.strip().split()
+								except ValueError: continue
+								dev = dev_resolve(*it.imap(int, dev.split(':')))
+								if not dev: continue # no point in just numbers
+								io = io.lower()
+								if io == 'total': continue # these can be aggregated separately
+								name = _name( svc, '{{}}.{}.{{}}'\
+									.format(suffix).format(dev, io.lower()) )
+								yield Datapoint(name, 'counter', int(val), None)
+					except (OSError, IOError): pass
+
+
+		def memory( self, services,
+				_name = 'processes.services.{}.memory.{}'.format,
+				_counters = ['pgpgin', 'pgpgout', 'pgfault', 'pgmajfault'] ):
+			for svc in set(services).difference(
+					self._systemd_cg_stick('blkio', services) ):
+				try:
+					with open(self._cg_svc_metric(
+							'memory', 'usage_in_bytes', svc )) as src:
+						for line in src:
+							name, val = line.strip().split()
+							if not name.startswith('total_'): continue
+							name, val = name[6:], int(val)
+							yield Datapoint( name, 'gauge'
+								if name not in _counters else 'counter', val, None )
+				except (OSError, IOError): pass
+
+
+		def read(self):
+			services = list(self._systemd_services())
+			for dp in it.chain.from_iterable( func(services)
+				for func in [self.cpuacct, self.blkio, self.memory] ): yield dp
 
 
 
@@ -540,7 +748,7 @@ def main():
 		link = CarbonAggregator(os.uname()[1], (host, int(port)))
 
 	collectors = list(
-		collector() for collector in filter(
+		collector() for collector in it.ifilter(
 			lambda x: isinstance(x, type),
 			vars(Collectors).values() ) )
 	log.debug('Collectors: {}'.format(collectors))
