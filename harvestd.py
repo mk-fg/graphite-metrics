@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 import itertools as it, operator as op, functools as ft
-from collections import namedtuple
+from collections import namedtuple, deque
 from io import open
 from time import time, sleep
 from glob import iglob
@@ -651,9 +651,9 @@ class Collectors(object):
 
 		@classmethod
 		@contextmanager
-		def _cg_metric(cls, path, *argz, **kwz):
+		def _cg_metric(cls, path, **kwz):
 			try:
-				with open(path, *argz, **kwz) as src: yield src
+				with open(path, mode='rb', **kwz) as src: yield src
 			except (OSError, IOError) as err:
 				log.debug('Failed to open cgroup metric: {}'.format(path, err))
 				raise
@@ -689,35 +689,51 @@ class Collectors(object):
 							_name(self._svc_name(svc), 'usage'),
 							'counter', int(src.read().strip()), None )
 				except (OSError, IOError): pass
-				# task count - only collected here
-				try:
-					with self._cg_metric(os.path.join(self._cg_svc_dir('cpuacct', svc), 'tasks')) as src:
-						yield Datapoint('processes.services.{}.threads'.format(
-							self._svc_name(svc) ), 'gauge', len(src.readlines()), None)
-				except (OSError, IOError): pass
 
 
-		def blkio( self, services,
+		@staticmethod
+		def _iostat(tid, _conv=dict( read_bytes=('r', 1),
+				write_bytes=('w', 1), cancelled_write_bytes=('w', -1),
+				syscr=('rc', 1), syscw=('wc', 1) )):
+			res = dict()
+			for line in open('/proc/{}/io'.format(tid), 'rb'):
+				name, val = line.split(':', 1)
+				try: k,m = _conv[name]
+				except KeyError: continue
+				if k not in res: res[k] = 0
+				res[k] += int(val.strip()) * m
+			# comm is used to make sure it's the same thread
+			return open('/proc/{}/comm'.format(tid), 'rb').read(),\
+				op.itemgetter('r', 'w', 'rc', 'wc')(res)
+
+		def blkio( self, services, _caches=deque([dict()], maxlen=2),
 				_name = 'processes.services.{}.io.{}'.format ):
+			## Counters from blkio seem to be totally useless in their current state
+			## So /proc/*/io stats are collected for all threads in cgroup
+			## Should be very inaccurate if threads are respawning
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('blkio', services) ):
-				for src, suffix in [
-						('io_service_bytes', 'bytes'),
-						('io_merged', 'iops.merged'),
-						('io_serviced', 'iops.total') ]:
-					try:
-						with self._cg_metric(self._cg_svc_metric('blkio', src, svc)) as src:
-							for line in src:
-								try: dev, io, val = line.strip().split()
-								except ValueError: continue
-								dev = dev_resolve(*it.imap(int, dev.split(':')))
-								if not dev: continue # no point in just numbers
-								io = io.lower()
-								if io == 'total': continue # these can be aggregated separately
-								name = _name( self._svc_name(svc),
-									'{{}}.{}.{{}}'.format(suffix).format(dev, io.lower()) )
-								yield Datapoint(name, 'counter', int(val), None)
-					except (OSError, IOError): pass
+				try:
+					with self._cg_metric(os.path.join(self._cg_svc_dir('blkio', svc), 'tasks')) as src:
+						threads = set(it.imap(int, it.ifilter(None, it.imap(str.strip, src.readlines()))))
+				except (OSError, IOError): continue
+				# thread count - only collected here
+				yield Datapoint( 'processes.services.{}.threads'\
+					.format(self._svc_name(svc)), 'gauge', len(threads), None )
+				update = dict()
+				for tid in threads:
+					try: comm,res = self._iostat(tid)
+					except (OSError, IOError): continue
+					update[(svc, tid, comm)] = res
+				prev = _caches[-1]
+				_caches.append(update)
+				delta_total = list(it.repeat(0, 4))
+				for k,res in update.viewitems():
+					try: delta = map(op.sub, res, prev[k])
+					except KeyError: continue
+					delta_total = map(op.add, delta, delta_total)
+				for k,v in it.izip(['bytes_read', 'bytes_write', 'ops_read', 'ops_write'], delta_total):
+					yield Datapoint(_name(self._svc_name(svc), k), 'gauge', v, None)
 
 
 		def memory( self, services,
