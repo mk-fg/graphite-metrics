@@ -684,33 +684,43 @@ class Collectors(object):
 			return open('/proc/{}/comm'.format(pid), 'rb').read(),\
 				op.itemgetter('r', 'w', 'rc', 'wc')(res)
 
+		@staticmethod
+		def _read_ids(src):
+			return set(it.imap(int, it.ifilter( None,
+				it.imap(str.strip, src.readlines()) )))
+
 		def blkio( self, services, _caches=deque([dict()], maxlen=2),
 				_name = 'processes.services.{}.io.{}'.format ):
 			## Counters from blkio seem to be totally useless in their current state
 			## So /proc/*/io stats are collected for all threads in cgroup
-			## Should be very inaccurate if threads are respawning
+			## Should be very inaccurate if pids are respawning
 			cache_prev = _caches[-1]
 			cache_update = dict()
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('blkio', services) ):
+				base = self._cg_svc_dir('blkio', svc)
 				try:
-					with self._cg_metric(os.path.join(self._cg_svc_dir('blkio', svc), 'tasks')) as src:
-						threads = set(it.imap(int, it.ifilter(None, it.imap(str.strip, src.readlines()))))
+					with self._cg_metric(os.path.join(base, 'tasks')) as src:
+						tids = self._read_ids(src) # just to count them
+					with self._cg_metric(os.path.join(base, 'cgroup.procs')) as src:
+						pids = self._read_ids(src)
 				except (OSError, IOError): continue
-				# thread count - only collected here
+				# process/thread count - only collected here
 				yield Datapoint( 'processes.services.{}.threads'\
-					.format(self._svc_name(svc)), 'gauge', len(threads), None )
+					.format(self._svc_name(svc)), 'gauge', len(tids), None )
+				yield Datapoint( 'processes.services.{}.processes'\
+					.format(self._svc_name(svc)), 'gauge', len(pids), None )
+				# actual io metrics
 				svc_update = list()
-				for tid in threads:
-					try: comm,res = self._iostat(tid)
+				for pid in pids:
+					try: comm,res = self._iostat(pid)
 					except (OSError, IOError): continue
-					svc_update.append(((svc, tid, comm), res))
+					svc_update.append(((svc, pid, comm), res))
 				delta_total = list(it.repeat(0, 4))
 				for k,res in svc_update:
 					try: delta = map(op.sub, res, cache_prev[k])
 					except KeyError: continue
 					delta_total = map(op.add, delta, delta_total)
-				log.debug(repr(delta_total))
 				for k,v in it.izip(['bytes_read', 'bytes_write', 'ops_read', 'ops_write'], delta_total):
 					yield Datapoint(_name(self._svc_name(svc), k), 'gauge', v, None)
 				cache_update.update(svc_update)
