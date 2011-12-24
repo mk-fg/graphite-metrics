@@ -659,40 +659,35 @@ class Collectors(object):
 				raise
 
 		@staticmethod
-		def _svc_name(svc): return svc.replace('@', '')
+		def _svc_name(svc): return svc.replace('@', '').replace('.', '_')
 
 
 		def cpuacct( self, services,
 				_name = 'processes.services.{}.cpu.{}'.format ):
-			## "stats" counters (user/sys) are reported in USER_HZ - 1/Xth of second
+			## "stats" counters (user/system) are reported in USER_HZ - 1/Xth of second
 			##  yielded values are in seconds, so counter should have 0-1 range,
 			##  when divided by the interval
 			## Not parsed: usage (should be sum of percpu)
-			def parse_stat(svc=None):
-				try:
-					with self._cg_metric(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
-						return op.itemgetter('user', 'system')(dict(
-							(name, int(val)) for name, val in
-								(line.strip().split() for line in src) if name in ('user', 'system') ))
-				except (OSError, IOError): return None, None
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('cpuacct', services) ):
 				if svc == 'total':
 					log.warn('Detected service name conflict with "total" aggregation')
 					continue
-				# user/sys jiffies
-				for name, val in it.izip(['user', 'sys'], parse_stat(svc)):
-					if val is not None:
-						yield Datapoint( _name(
-							self._svc_name(svc), name),
-							'counter', float(val) / user_hz, None )
-				# percpu clicks
+				# user/system jiffies
+				with self._cg_metric(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
+					stat = dict(
+						(name, int(val)) for name, val in
+							(line.strip().split() for line in src) if name in ('user', 'system') )
+				for name in 'user', 'system':
+					yield Datapoint( _name(
+						self._svc_name(svc), name),
+						'counter', float(stat[name]) / user_hz, None )
+				# usage clicks
 				try:
-					with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage_percpu', svc)) as src:
-						for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
-							if val is not None:
-								yield Datapoint(_name(
-									self._svc_name(svc), 'node.{}'.format(cpu) ), 'counter', val, None)
+					with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage', svc)) as src:
+						yield Datapoint(
+							_name(self._svc_name(svc), 'usage'),
+							'counter', int(src.read().strip()), None )
 				except (OSError, IOError): pass
 				# task count - only collected here
 				try:
