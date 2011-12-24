@@ -675,18 +675,6 @@ class Collectors(object):
 							(name, int(val)) for name, val in
 								(line.strip().split() for line in src) if name in ('user', 'system') ))
 				except (OSError, IOError): return None, None
-			# Totals
-			for name, val in it.izip(['user', 'sys'], parse_stat()):
-				if val is not None:
-					yield Datapoint( _name('total', name),
-						'counter', float(val) / user_hz, None )
-			try:
-				with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage_percpu')) as src:
-					for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
-						if val is not None:
-							yield Datapoint(_name('total', 'node.{}'.format(cpu)), 'counter', val, None)
-			except (OSError, IOError): pass
-			# Services
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('cpuacct', services) ):
 				if svc == 'total':
