@@ -721,8 +721,7 @@ class Collectors(object):
 
 
 		def memory( self, services,
-				_name = 'processes.services.{}.memory.{}'.format,
-				_counters = ['pgpgin', 'pgpgout', 'pgfault', 'pgmajfault'] ):
+				_name = 'processes.services.{}.memory.{}'.format ):
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('memory', services) ):
 				try:
@@ -731,9 +730,10 @@ class Collectors(object):
 						for line in src:
 							name, val = line.strip().split()
 							if not name.startswith('total_'): continue
-							name, val = _name(self._svc_name(svc), name[6:]), int(val)
-							yield Datapoint( name, 'gauge'
-								if name not in _counters else 'counter', val, None )
+							name = name[6:]
+							name, val, val_type = _name(self._svc_name(svc), name),\
+								int(val), 'gauge' if not name.startswith('pg') else 'counter'
+							yield Datapoint(name, val_type, val, None)
 				except (OSError, IOError): pass
 
 
