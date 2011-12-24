@@ -680,7 +680,7 @@ class Collectors(object):
 				except KeyError: continue
 				if k not in res: res[k] = 0
 				res[k] += int(val.strip()) * m
-			# comm is used to make sure it's the same thread
+			# comm is used to make sure it's the same process
 			return open('/proc/{}/comm'.format(pid), 'rb').read(),\
 				op.itemgetter('r', 'w', 'rc', 'wc')(res)
 
@@ -692,7 +692,7 @@ class Collectors(object):
 		def blkio( self, services, _caches=deque([dict()], maxlen=2),
 				_name = 'processes.services.{}.io.{}'.format ):
 			## Counters from blkio seem to be totally useless in their current state
-			## So /proc/*/io stats are collected for all threads in cgroup
+			## So /proc/*/io stats are collected for all processes in cgroup
 			## Should be very inaccurate if pids are respawning
 			cache_prev = _caches[-1]
 			cache_update = dict()
