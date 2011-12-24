@@ -683,7 +683,8 @@ class Collectors(object):
 			try:
 				with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage_percpu')) as src:
 					for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
-						if val is not None: yield Datapoint(_name('total', cpu), 'counter', val, None)
+						if val is not None:
+							yield Datapoint(_name('total', 'node.{}'.format(cpu)), 'counter', val, None)
 			except (OSError, IOError): pass
 			# Services
 			for svc in set(services).intersection(
@@ -702,7 +703,8 @@ class Collectors(object):
 					with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage_percpu', svc)) as src:
 						for cpu, val in enumerate(it.imap(int, src.read().strip().split())):
 							if val is not None:
-								yield Datapoint(_name(self._svc_name(svc), cpu), 'counter', val, None)
+								yield Datapoint(_name(
+									self._svc_name(svc), 'node.{}'.format(cpu) ), 'counter', val, None)
 				except (OSError, IOError): pass
 				# task count - only collected here
 				try:
