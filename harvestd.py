@@ -522,10 +522,10 @@ class Collectors(object):
 							job = match.group('job')
 							for alias, regex in self.aliases:
 								group = alias[1:] if alias.startswith('_') else None
-								match = regex.search(job)
-								if match:
+								alias_match = regex.search(job)
+								if alias_match:
 									if group is not None:
-										job = _re_sanitize.sub('_', match.group(group))
+										job = _re_sanitize.sub('_', alias_match.group(group))
 									else: job = alias
 									break
 							else:
