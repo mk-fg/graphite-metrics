@@ -580,7 +580,7 @@ class Collectors(object):
 						'org.freedesktop.systemd1', '/org/freedesktop/systemd1' ),
 					'org.freedesktop.systemd1.Manager' ).ListUnits():
 				name, state = it.imap(str, op.itemgetter(0, 4)(unit))
-				if name.endswith('.service') and state == 'running':
+				if name.endswith('.service') and state in ('running', 'start'):
 					name = name[:-8]
 					if '@' in name: name = name.rsplit('@', 1)[0] + '@'
 					yield name
