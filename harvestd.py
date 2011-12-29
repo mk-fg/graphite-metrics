@@ -685,9 +685,11 @@ class Collectors(object):
 				except KeyError: continue
 				if k not in res: res[k] = 0
 				res[k] += int(val.strip()) * m
+			try: res = op.itemgetter('r', 'w', 'rc', 'wc')(res)
+			except KeyError:
+				raise OSError('Incomplete IO data for pid {}'.format(pid))
 			# comm is used to make sure it's the same process
-			return open('/proc/{}/comm'.format(pid), 'rb').read(),\
-				op.itemgetter('r', 'w', 'rc', 'wc')(res)
+			return open('/proc/{}/comm'.format(pid), 'rb').read(), res
 
 		@staticmethod
 		def _read_ids(src):
@@ -718,7 +720,7 @@ class Collectors(object):
 				# actual io metrics
 				svc_update = list()
 				for pid in pids:
-					try: comm,res = self._iostat(pid)
+					try: comm, res = self._iostat(pid)
 					except (OSError, IOError): continue
 					svc_update.append(((svc, pid, comm), res))
 				delta_total = list(it.repeat(0, 4))
