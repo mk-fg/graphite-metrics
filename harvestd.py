@@ -675,6 +675,8 @@ class Collectors(object):
 				syscr=('rc', 1), syscw=('wc', 1) )):
 			res = dict()
 			for line in open('/proc/{}/io'.format(pid), 'rb'):
+				line = line.strip()
+				if not line: continue
 				try: name, val = line.split(':', 1)
 				except ValueError:
 					log.warn('Unrecognized line format in proc/{}/io: {!r}'.format(pid, line))
