@@ -499,6 +499,7 @@ class Collectors(object):
 			('forager_scm', r'\bforager_scm\.py\b'),
 			('feedjack_update', r'\bfeedjack_update\.py\b'),
 			('sync_distfiles', r'\bsync_distfiles\b'),
+			('atop_rotate', r'\batop\.service\b'),
 			('_name', r'\bsystemd: \S+ (?P<name>\S+)\b'),
 			('_name', r'/etc/(\S+/)*(?P<name>\S+)(\s+|$)') ]
 
