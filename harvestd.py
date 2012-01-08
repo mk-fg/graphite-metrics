@@ -152,19 +152,21 @@ def file_follow( src, open_tail=True,
 				open_tail = False
 			src_inode, src_inode_ts =\
 				sanity_chk_stats(stat(src.fileno())), sanity_chk_ts()
+			src_inode_chk = None
 
 		ts = time()
 		if ts > src_inode_ts: # rotation check
-			src_inode_chk = sanity_chk_stats(stat(path))
-			if src_inode_chk != src_inode: # rotated
+			src_inode_chk, src_inode_ts =\
+				sanity_chk_stats(stat(path)), sanity_chk_ts(ts)
+			if stat(src.fileno()).st_size < src.tell(): src.seek(0) # truncated
+		else: src_inode_chk = None
+
+		buff = src.readline()
+		if not buff: # eof
+			if src_inode_chk and src_inode_chk != src_inode: # rotated
 				src.close()
 				src, line = None, ''
 				continue
-			elif stat(src.fileno()).st_size < src.tell(): src.seek(0) # truncated
-			src_inode_ts = sanity_chk_ts(ts)
-
-		buff = src.readline()
-		if not buff:
 			if read_chk is None:
 				yield (buff if not yield_file else (buff, src))
 			else:
