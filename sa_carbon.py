@@ -9,6 +9,7 @@ parser.add_argument('-p', '--port', type=int, default=2003,
 parser.add_argument('-i', '--force-interval', type=int,
 	help='Discard datapoints for intervals (with a warning), different from this one.')
 parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')
+parser.add_argument('--strict', action='store_true', help='Bail out on some common sysstat bugs.')
 parser.add_argument('--debug', action='store_true', help='Dump a lot of debug info.')
 parser.add_argument('--debug-data', action='store_true', help='Dump processed datapoints.')
 optz = parser.parse_args()
@@ -191,7 +192,8 @@ def read_data( ts_to=None, max_past_days=7,
 
 	sa_days = dict( (ts.day, ts) for ts in
 		((ts_to - timedelta(i)) for i in xrange(max_past_days+1)) )
-	sa_files = filter(op.methodcaller('startswith', 'sa'), os.listdir(sa_path))
+	sa_files = sorted(it.ifilter(
+		op.methodcaller('startswith', 'sa'), os.listdir(sa_path) ))
 	host = os.uname()[1]
 	log.debug('SA files to process: {}'.format(sa_files))
 
@@ -238,17 +240,24 @@ def read_data( ts_to=None, max_past_days=7,
 				log.warn( 'Mismatching hostname in sa data:'
 					' {} (uname: {}), skipping'.format(data['nodename'], host) )
 				continue
-			# Make sure that data inside matches filename
-			sa_day_data = datetime.strptime(data['file-date'], '%Y-%m-%d')
-			if sa_day - sa_day_data > timedelta(1):
-				raise ValueError( 'Sa name/data timestamp'
-					' mismatch: name={}, data={}, file={}'.format(sa_day, sa_day_data, sa) )
+			if optz.strict:
+				# Make sure that data inside matches filename
+				sa_day_data = datetime.strptime(data['file-date'], '%Y-%m-%d')
+				if sa_day - sa_day_data > timedelta(1):
+					raise ValueError( 'Sa name/data timestamp'
+						' mismatch: name={}, data={}, file={}'.format(sa_day, sa_day_data, sa) )
+			sa_day_ts = mktime(sa_day.timetuple())
 			# Read the data
 			for ts, interval, metrics in it.ifilter(
 					None, it.imap(process_entry, data['statistics']) ):
+				if abs(ts - sa_day_ts) > 24*3600 + interval + 1:
+					log.warn( 'Dropping sample because of timestamp mismatch'
+						' (timestamp: {}, expected date: {})'.format(ts, sa_day_ts) )
+					continue
 				if optz.force_interval and interval != optz.force_interval:
 					log.warn( 'Dropping sample because of interval mismatch'
-						' (interval: {}, required: {})'.format(interval, optz.force_interval) )
+						' (interval: {}, required: {}, timestamp: {})'.format(
+							interval, optz.force_interval, ts ) )
 					continue
 				for name, val in metrics:
 					name = [host] + list(name)
