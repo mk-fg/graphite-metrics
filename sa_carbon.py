@@ -201,7 +201,7 @@ def read_data( ts_to=None, max_past_days=7,
 		sa_day = int(sa[2:])
 		try: sa_day = sa_days[sa_day]
 		except KeyError: continue # too old or new
-		sa_ts_to = ts_to if sa_day.day == ts_to.day else None
+		sa_ts_to = None # otherwise it's possible to get data for the oldest day in a file
 
 		sa = os.path.join(sa_path, sa)
 		log.debug('Processing file: {}'.format(sa))
