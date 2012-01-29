@@ -731,7 +731,7 @@ class Collectors(object):
 		def blkio( self, services,
 				_caches=deque([dict()], maxlen=2),
 				_re_line = re.compile( r'^(?P<dev>\d+:\d+)\s+'
-					r'(?P<iotype>Read|Write)\s+(?P<count>)\s*$' ),
+					r'(?P<iotype>Read|Write)\s+(?P<count>\d+)$' ),
 				_name = 'processes.services.{}.io.{}'.format ):
 			# Caches are for syscall io
 			cache_prev = _caches[-1]
@@ -751,11 +751,11 @@ class Collectors(object):
 								self._cg_svc_metric('blkio', src, svc) ) as src:
 							dst = svc_io.setdefault(metric, dict())
 							for line in src:
-								match = _re_line.search(line)
+								match = _re_line.search(line.strip())
 								if not match: continue # "Total" line, empty line
 								dev = dev_resolve(*map(int, match.group('dev').split(':')))
 								if dev is None: continue
-								dst = dst.setdefault(dev, dict())
+								dev = dst.setdefault(dev, dict())
 								iotype, val = match.group('iotype').lower(), int(match.group('count'))
 								if iotype in dev:
 									log.warn( 'Duplicate entry for io type {!r},'
