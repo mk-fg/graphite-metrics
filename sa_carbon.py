@@ -79,7 +79,8 @@ class CarbonClient(object):
 				self.reconnect()
 
 
-def dev_resolve(major, minor, _cache = dict(), _cache_time=600):
+def dev_resolve( major, minor,
+		log_fails=True, _cache = dict(), _cache_time=600 ):
 	ts_now = time()
 	while True:
 		if not _cache: ts = 0
@@ -98,6 +99,9 @@ def dev_resolve(major, minor, _cache = dict(), _cache_time=600):
 			_cache[None] = ts_now
 			continue # ...and try again
 		if dev_cached: dev_cached = dev_cached.replace('.', '_')
+		elif log_fails:
+			log.warn( 'Unable to resolve device'
+				' from major/minor numbers: {}:{}'.format(major, minor) )
 		return dev_cached
 
 def process_entry(entry, _sector_bytes=512):
@@ -117,7 +121,7 @@ def process_entry(entry, _sector_bytes=512):
 			if not dev_sadf.startswith('dev'):
 				log.warn('Unknown device name format: {}, skipping'.format(dev_sadf))
 				continue
-			dev = dev_resolve(*it.imap(int, dev_sadf[3:].split('-')))
+			dev = dev_resolve(*it.imap(int, dev_sadf[3:].split('-')), log_fails=False)
 			if dev is None:
 				log.warn('Unable to resolve name for device {!r}, skipping'.format(dev_sadf))
 				continue
