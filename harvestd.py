@@ -245,6 +245,32 @@ def file_follow_durable( path,
 			break
 
 
+def dev_resolve( major, minor,
+		log_fails=True, _cache = dict(), _cache_time=600 ):
+	ts_now = time()
+	while True:
+		if not _cache: ts = 0
+		else:
+			dev = major, minor
+			dev_cached, ts = (None, _cache[None])\
+				if dev not in _cache else _cache[dev]
+		# Update cache, if necessary
+		if ts_now > ts + _cache_time:
+			_cache.clear()
+			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
+				link_name = os.path.basename(link)
+				try: link_dev = os.stat(link).st_rdev
+				except OSError: continue # EPERM, EINVAL
+				_cache[(os.major(link_dev), os.minor(link_dev))] = link_name, ts_now
+			_cache[None] = ts_now
+			continue # ...and try again
+		if dev_cached: dev_cached = dev_cached.replace('.', '_')
+		elif log_fails:
+			log.warn( 'Unable to resolve device'
+				' from major/minor numbers: {}:{}'.format(major, minor) )
+		return dev_cached
+
+
 
 class Collector(object): pass
 
@@ -655,14 +681,17 @@ class Collectors(object):
 					log.warn('Detected service name conflict with "total" aggregation')
 					continue
 				# user/system jiffies
-				with self._cg_metric(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
-					stat = dict(
-						(name, int(val)) for name, val in
-							(line.strip().split() for line in src) if name in ('user', 'system') )
-				for name in 'user', 'system':
-					yield Datapoint( _name(
-						self._svc_name(svc), name),
-						'counter', float(stat[name]) / user_hz, None )
+				try:
+					with self._cg_metric(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
+						stat = dict(
+							(name, int(val)) for name, val in
+								(line.strip().split() for line in src) if name in ('user', 'system') )
+				except (OSError, IOError): pass
+				else:
+					for name in 'user', 'system':
+						yield Datapoint( _name(
+							self._svc_name(svc), name),
+							'counter', float(stat[name]) / user_hz, None )
 				# usage clicks
 				try:
 					with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage', svc)) as src:
@@ -699,15 +728,56 @@ class Collectors(object):
 			return set(it.imap(int, it.ifilter( None,
 				it.imap(str.strip, src.readlines()) )))
 
-		def blkio( self, services, _caches=deque([dict()], maxlen=2),
+		def blkio( self, services,
+				_caches=deque([dict()], maxlen=2),
+				_re_line = re.compile( r'^(?P<dev>\d+:\d+)\s+'
+					r'(?P<iotype>Read|Write)\s+(?P<count>)\s*$' ),
 				_name = 'processes.services.{}.io.{}'.format ):
-			## Counters from blkio seem to be totally useless in their current state
-			## So /proc/*/io stats are collected for all processes in cgroup
-			## Should be very inaccurate if pids are respawning
+			# Caches are for syscall io
 			cache_prev = _caches[-1]
 			cache_update = dict()
+
 			for svc in set(services).intersection(
 					self._systemd_cg_stick('blkio', services) ):
+
+				## Block IO
+				## Only reads/writes are accounted, sync/async is meaningless now,
+				##  because only sync ops are counted anyway
+				svc_io = dict()
+				for metric, src in [ ('bytes', 'io_service_bytes'),
+						('time', 'io_service_time'), ('ops', 'io_serviced') ]:
+					try:
+						with self._cg_metric(
+								self._cg_svc_metric('blkio', src, svc) ) as src:
+							dst = svc_io.setdefault(metric, dict())
+							for line in src:
+								match = _re_line.search(line)
+								if not match: continue # "Total" line, empty line
+								dev = dev_resolve(*map(int, match.group('dev').split(':')))
+								if dev is None: continue
+								dst = dst.setdefault(dev, dict())
+								iotype, val = match.group('iotype').lower(), int(match.group('count'))
+								if iotype in dev:
+									log.warn( 'Duplicate entry for io type {!r},'
+										' device {!r} in blkio accunting data'.format(iotype, dev) )
+									dev[iotype] += val
+								else: dev[iotype] = val
+					except (OSError, IOError): pass
+				for metric, devs in svc_io.viewitems():
+					for dev, vals in devs.viewitems():
+						if {'read', 'write'} != frozenset(vals):
+							log.warn('Unexpected IO counter types: {}'.format(vals))
+							continue
+						for k,v in vals.viewitems():
+							if not v: continue # no point writing always-zeroes for most devices
+							yield Datapoint( _name(
+								self._svc_name(svc), 'blkio.{}.{}_{}'.format(dev, metric, k) ),
+								'counter', int(v), None )
+
+				## Syscall IO
+				## Counters from blkio seem to be less useful in general,
+				##  so /proc/*/io stats are collected for all processes in cgroup
+				## Should be very inaccurate if pids are respawning
 				base = self._cg_svc_dir('blkio', svc)
 				try:
 					with self._cg_metric(os.path.join(base, 'tasks')) as src:
@@ -715,12 +785,12 @@ class Collectors(object):
 					with self._cg_metric(os.path.join(base, 'cgroup.procs')) as src:
 						pids = self._read_ids(src)
 				except (OSError, IOError): continue
-				# process/thread count - only collected here
+				# Process/thread count - only collected here
 				yield Datapoint( 'processes.services.{}.threads'\
 					.format(self._svc_name(svc)), 'gauge', len(tids), None )
 				yield Datapoint( 'processes.services.{}.processes'\
 					.format(self._svc_name(svc)), 'gauge', len(pids), None )
-				# actual io metrics
+				# Actual io metrics
 				svc_update = list()
 				for pid in pids:
 					try: comm, res = self._iostat(pid)
