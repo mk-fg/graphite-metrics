@@ -592,15 +592,31 @@ class Collectors(object):
 				if rc not in self._stuck_list: self._stuck_list[rc] = set()
 				self._stuck_list[rc].add(svc)
 
-		_cg_svc_dir = classmethod(
-			lambda cls, rc, svc=None:\
-				os.path.join( cls.cg_root, rc,
-					'system/{}.service'.format(svc) if svc else '' ) )
-		_cg_svc_metric = classmethod(
-			lambda cls, rc, metric, svc=None, svc_dir=None:\
-				os.path.join(
-					svc_dir or cls._cg_svc_dir(rc, svc),
-					'{}.{}'.format(rc, metric) ) )
+
+		@classmethod
+		def _cg_svc_dir(cls, rc, svc=None):
+			path = os.path.join(cls.cg_root, rc)
+			if not svc: return path
+			svc = svc.rsplit('@', 1)
+			return os.path.join(path, 'system/{}.service'.format(svc[0] + '@'), svc[1])\
+				if len(svc) > 1 else os.path.join(path, 'system/{}.service'.format(svc[0]))
+
+		@classmethod
+		def _cg_svc_metrics(cls, rc, metric, svc_instances):
+			return (os.path.join( cls._cg_svc_dir(rc, svc),
+				'{}.{}'.format(rc, metric) ) for svc in svc_instances)
+
+		@classmethod
+		@contextmanager
+		def _cg_metric(cls, path, **kwz):
+			try:
+				with open(path, mode='rb', **kwz) as src: yield src
+			except (OSError, IOError) as err:
+				log.debug('Failed to open cgroup metric: {}'.format(path, err))
+				raise
+
+		@staticmethod
+		def _svc_name(svc): return svc.replace('@', '').replace('.', '_')
 
 
 		@staticmethod
@@ -609,10 +625,7 @@ class Collectors(object):
 						'org.freedesktop.systemd1', '/org/freedesktop/systemd1' ),
 					'org.freedesktop.systemd1.Manager' ).ListUnits():
 				name, state = it.imap(str, op.itemgetter(0, 4)(unit))
-				if name.endswith('.service') and state in ('running', 'start'):
-					name = name[:-8]
-					if '@' in name: name = name.rsplit('@', 1)[0] + '@'
-					yield name
+				if name.endswith('.service') and state in ('running', 'start'): yield name[:-8]
 
 		def _systemd_cg_stick(self, rc, services):
 			if rc not in self._stuck_list: self._stuck_list[rc] = set()
@@ -629,7 +642,7 @@ class Collectors(object):
 					else:
 						self._stuck_list[rc].add(svc)
 						stuck_update = True
-				else: stuck.remove(svc)
+				else: stuck.remove(svc) # to exclude it from the cleanup loop
 			# Process stuck cgroups for removed services,
 			#  try dropping these, otherwise just unstick and forget
 			for svc in stuck:
@@ -655,50 +668,47 @@ class Collectors(object):
 				self._stuck_list_file.flush()
 			return services
 
-
-		@classmethod
-		@contextmanager
-		def _cg_metric(cls, path, **kwz):
-			try:
-				with open(path, mode='rb', **kwz) as src: yield src
-			except (OSError, IOError) as err:
-				log.debug('Failed to open cgroup metric: {}'.format(path, err))
-				raise
-
-		@staticmethod
-		def _svc_name(svc): return svc.replace('@', '').replace('.', '_')
+		_systemd_sticky_instances = lambda self, rc, services: (
+			(self._svc_name(svc), list(svc_instances))
+			for svc, svc_instances in it.groupby(
+				set(services).intersection(self._systemd_cg_stick(rc, services)),
+				key=lambda k: (k.rsplit('@', 1)[0]+'@' if '@' in k else k) ) )
 
 
 		def cpuacct( self, services,
-				_name = 'processes.services.{}.cpu.{}'.format ):
+				_name = 'processes.services.{}.cpu.{}'.format,
+				_stats=('user', 'system') ):
 			## "stats" counters (user/system) are reported in USER_HZ - 1/Xth of second
 			##  yielded values are in seconds, so counter should have 0-1 range,
 			##  when divided by the interval
 			## Not parsed: usage (should be sum of percpu)
-			for svc in set(services).intersection(
-					self._systemd_cg_stick('cpuacct', services) ):
+			for svc, svc_instances in self._systemd_sticky_instances('cpuacct', services):
 				if svc == 'total':
 					log.warn('Detected service name conflict with "total" aggregation')
 					continue
 				# user/system jiffies
-				try:
-					with self._cg_metric(self._cg_svc_metric('cpuacct', 'stat', svc)) as src:
-						stat = dict(
-							(name, int(val)) for name, val in
-								(line.strip().split() for line in src) if name in ('user', 'system') )
-				except (OSError, IOError): pass
-				else:
-					for name in 'user', 'system':
-						yield Datapoint( _name(
-							self._svc_name(svc), name),
-							'counter', float(stat[name]) / user_hz, None )
+				stat = dict()
+				for path in self._cg_svc_metrics('cpuacct', 'stat', svc_instances):
+					try:
+						with self._cg_metric(path) as src:
+							for name, val in (line.strip().split() for line in src):
+								if name not in _stats: continue
+								try: stat[name] += int(val)
+								except KeyError: stat[name] = int(val)
+					except (OSError, IOError): pass
+				for name in _stats:
+					if name not in stat: continue
+					yield Datapoint( _name(svc, name),
+						'counter', float(stat[name]) / user_hz, None )
 				# usage clicks
-				try:
-					with self._cg_metric(self._cg_svc_metric('cpuacct', 'usage', svc)) as src:
-						yield Datapoint(
-							_name(self._svc_name(svc), 'usage'),
-							'counter', int(src.read().strip()), None )
-				except (OSError, IOError): pass
+				usage = None
+				for path in self._cg_svc_metrics('cpuacct', 'usage', svc_instances):
+					try:
+						with self._cg_metric(path) as src:
+							usage = (0 if usage is None else usage) + int(src.read().strip())
+					except (OSError, IOError): pass
+				if usage is not None:
+					yield Datapoint(_name(svc, 'usage'), 'counter', usage, None)
 
 
 		@staticmethod
@@ -737,8 +747,7 @@ class Collectors(object):
 			cache_prev = _caches[-1]
 			cache_update = dict()
 
-			for svc in set(services).intersection(
-					self._systemd_cg_stick('blkio', services) ):
+			for svc, svc_instances in self._systemd_sticky_instances('blkio', services):
 
 				## Block IO
 				## Only reads/writes are accounted, sync/async is meaningless now,
@@ -746,23 +755,20 @@ class Collectors(object):
 				svc_io = dict()
 				for metric, src in [ ('bytes', 'io_service_bytes'),
 						('time', 'io_service_time'), ('ops', 'io_serviced') ]:
-					try:
-						with self._cg_metric(
-								self._cg_svc_metric('blkio', src, svc) ) as src:
-							dst = svc_io.setdefault(metric, dict())
-							for line in src:
-								match = _re_line.search(line.strip())
-								if not match: continue # "Total" line, empty line
-								dev = dev_resolve(*map(int, match.group('dev').split(':')))
-								if dev is None: continue
-								dev = dst.setdefault(dev, dict())
-								iotype, val = match.group('iotype').lower(), int(match.group('count'))
-								if iotype in dev:
-									log.warn( 'Duplicate entry for io type {!r},'
-										' device {!r} in blkio accunting data'.format(iotype, dev) )
-									dev[iotype] += val
-								else: dev[iotype] = val
-					except (OSError, IOError): pass
+					dst = svc_io.setdefault(metric, dict())
+					for path in self._cg_svc_metrics('blkio', src, svc_instances):
+						try:
+							with self._cg_metric(path) as src:
+								for line in src:
+									match = _re_line.search(line.strip())
+									if not match: continue # "Total" line, empty line
+									dev = dev_resolve(*map(int, match.group('dev').split(':')))
+									if dev is None: continue
+									dev = dst.setdefault(dev, dict())
+									iotype, val = match.group('iotype').lower(), int(match.group('count'))
+									if iotype not in dev: dev[iotype] = val
+									else: dev[iotype] += val
+						except (OSError, IOError): pass
 				for metric, devs in svc_io.viewitems():
 					for dev, vals in devs.viewitems():
 						if {'read', 'write'} != frozenset(vals):
@@ -770,26 +776,28 @@ class Collectors(object):
 							continue
 						for k,v in vals.viewitems():
 							if not v: continue # no point writing always-zeroes for most devices
-							yield Datapoint( _name(
-								self._svc_name(svc), 'blkio.{}.{}_{}'.format(dev, metric, k) ),
-								'counter', int(v), None )
+							yield Datapoint(_name( svc,
+								'blkio.{}.{}_{}'.format(dev, metric, k) ), 'counter', v, None)
 
 				## Syscall IO
 				## Counters from blkio seem to be less useful in general,
 				##  so /proc/*/io stats are collected for all processes in cgroup
 				## Should be very inaccurate if pids are respawning
-				base = self._cg_svc_dir('blkio', svc)
-				try:
-					with self._cg_metric(os.path.join(base, 'tasks')) as src:
-						tids = self._read_ids(src) # just to count them
-					with self._cg_metric(os.path.join(base, 'cgroup.procs')) as src:
-						pids = self._read_ids(src)
-				except (OSError, IOError): continue
+				tids, pids = set(), set()
+				for base in it.imap(ft.partial(
+						self._cg_svc_dir, 'blkio' ), svc_instances):
+					try:
+						with self._cg_metric(os.path.join(base, 'tasks')) as src:
+							tids.update(self._read_ids(src)) # just to count them
+						with self._cg_metric(os.path.join(base, 'cgroup.procs')) as src:
+							pids.update(self._read_ids(src))
+					except (OSError, IOError): continue
 				# Process/thread count - only collected here
-				yield Datapoint( 'processes.services.{}.threads'\
-					.format(self._svc_name(svc)), 'gauge', len(tids), None )
-				yield Datapoint( 'processes.services.{}.processes'\
-					.format(self._svc_name(svc)), 'gauge', len(pids), None )
+				yield Datapoint( 'processes.services.'
+					'{}.threads'.format(svc), 'gauge', len(tids), None)
+				yield Datapoint( 'processes.services.'
+					'{}.processes'.format(svc), 'gauge', len(pids), None )
+
 				# Actual io metrics
 				svc_update = list()
 				for pid in pids:
@@ -802,26 +810,29 @@ class Collectors(object):
 					except KeyError: continue
 					delta_total = map(op.add, delta, delta_total)
 				for k,v in it.izip(['bytes_read', 'bytes_write', 'ops_read', 'ops_write'], delta_total):
-					yield Datapoint(_name(self._svc_name(svc), k), 'gauge', v, None)
+					yield Datapoint(_name(svc, k), 'gauge', v, None)
 				cache_update.update(svc_update)
 			_caches.append(cache_update)
 
 
 		def memory( self, services,
 				_name = 'processes.services.{}.memory.{}'.format ):
-			for svc in set(services).intersection(
-					self._systemd_cg_stick('memory', services) ):
-				try:
-					with self._cg_metric(self._cg_svc_metric(
-							'memory', 'stat', svc )) as src:
-						for line in src:
-							name, val = line.strip().split()
-							if not name.startswith('total_'): continue
-							name = name[6:]
-							name, val, val_type = _name(self._svc_name(svc), name),\
-								int(val), 'gauge' if not name.startswith('pg') else 'counter'
-							yield Datapoint(name, val_type, val, None)
-				except (OSError, IOError): pass
+			for svc, svc_instances in self._systemd_sticky_instances('memory', services):
+				vals = dict()
+				for path in self._cg_svc_metrics('memory', 'stat', svc_instances):
+					try:
+						with self._cg_metric(path) as src:
+							for line in src:
+								name, val = line.strip().split()
+								if not name.startswith('total_'): continue
+								name = name[6:]
+								val, k = int(val), ( _name(svc, name),
+									'gauge' if not name.startswith('pg') else 'counter' )
+								if k not in vals: vals[k] = val
+								else: vals[k] += val
+					except (OSError, IOError): pass
+				for (name, val_type), val in vals.viewitems():
+					yield Datapoint(name, val_type, val, None)
 
 
 		def read(self):
