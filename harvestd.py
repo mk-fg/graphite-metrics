@@ -109,7 +109,9 @@ class Datapoint(namedtuple('Value', 'name type value ts')):
 				self._counter_cache[self.name] = self.value, ts
 				return None
 			v0, ts0 = self._counter_cache[self.name]
-			if ts == ts0: return None # way too soon
+			if ts == ts0:
+				log.warn('Double-poll of a counter for {!r}'.format(self.name))
+				return None
 			value = float(self.value - v0) / (ts - ts0)
 			self._counter_cache[self.name] = self.value, ts
 			if value < 0:
@@ -672,7 +674,7 @@ class Collectors(object):
 		_systemd_sticky_instances = lambda self, rc, services: (
 			(self._svc_name(svc), list(svc_instances))
 			for svc, svc_instances in it.groupby(
-				set(services).intersection(self._systemd_cg_stick(rc, services)),
+				sorted(set(services).intersection(self._systemd_cg_stick(rc, services))),
 				key=lambda k: (k.rsplit('@', 1)[0]+'@' if '@' in k else k) ) )
 
 
