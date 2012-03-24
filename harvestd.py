@@ -109,6 +109,7 @@ class Datapoint(namedtuple('Value', 'name type value ts')):
 				self._counter_cache[self.name] = self.value, ts
 				return None
 			v0, ts0 = self._counter_cache[self.name]
+			if ts == ts0: return None # way too soon
 			value = float(self.value - v0) / (ts - ts0)
 			self._counter_cache[self.name] = self.value, ts
 			if value < 0:
