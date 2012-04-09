@@ -6,7 +6,7 @@ import itertools as it, operator as op, functools as ft
 from glob import iglob
 import os, sys
 
-from setuptools import setup, find_packages, Extension
+from setuptools import setup, find_packages
 
 # Dirty workaround for "error: byte-compiling is disabled." message
 sys.dont_write_bytecode = False
