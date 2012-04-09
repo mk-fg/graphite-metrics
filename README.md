@@ -1,10 +1,7 @@
 graphite-metrics: standalone graphite collectors for various stuff not (or poorly) handled by other monitoring daemons
 --------------------
 
-Notable stuff here:
-
-
-### sa_carbon.py
+### sa_carbon
 
 Script to run once-in-a-while (from 1 min to 1 month) to push data, collected by
 [sysstat](http://sebastien.godard.pagesperso-orange.fr/) into graphite.
@@ -12,8 +9,7 @@ Script to run once-in-a-while (from 1 min to 1 month) to push data, collected by
 Uses `sadf -j` json export for /var/log/sa files, collected by sysstat, usually
 by sadc (in my case - `sadc -F -L -S DISK -S XDISK -S POWER 60`).
 
-
-### harvestd.py
+### harvestd
 
 Simple daemon, which collects metric values and sends them to graphite once per
 interval.

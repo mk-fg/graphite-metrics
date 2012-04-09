@@ -255,7 +255,7 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('host', help='Carbon host to send data to.')
 	parser.add_argument('-p', '--port', type=int, default=2003,
-		help='Carbon line-receiver (tcp) port (default: %(default)s).')
+		help='Carbon tcp line-receiver port (default: %(default)s).')
 	parser.add_argument('-i', '--force-interval', type=int,
 		help='Discard datapoints for intervals (with a warning), different from this one.')
 	parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')

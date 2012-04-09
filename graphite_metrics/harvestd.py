@@ -73,7 +73,8 @@ def main():
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Collect and dispatch various metrics to carbon daemon.')
-	parser.add_argument('remote', help='host[:port] (default port: 2003) of carbon destination.')
+	parser.add_argument('remote',
+		help='host[:port] (default port: 2003) of carbon tcp line-receiver destination.')
 	parser.add_argument('-i', '--interval', type=int, default=60,
 		help='Interval between datapoints (default: %(default)s).')
 	parser.add_argument('-n', '--dry-run', action='store_true', help='Do not actually send data.')
