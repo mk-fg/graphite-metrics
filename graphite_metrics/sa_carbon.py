@@ -1,34 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument('host', help='Carbon host to send data to.')
-parser.add_argument('-p', '--port', type=int, default=2003,
-	help='Carbon line-receiver (tcp) port (default: %(default)s).')
-parser.add_argument('-i', '--force-interval', type=int,
-	help='Discard datapoints for intervals (with a warning), different from this one.')
-parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')
-parser.add_argument('--strict', action='store_true', help='Bail out on some common sysstat bugs.')
-parser.add_argument('--debug', action='store_true', help='Dump a lot of debug info.')
-parser.add_argument('--debug-data', action='store_true', help='Dump processed datapoints.')
-optz = parser.parse_args()
-
-import logging
-logging.basicConfig( level='DEBUG'\
-	if optz.debug else 'WARNING' )
-log = logging.getLogger()
-
-
 import itertools as it, operator as op, functools as ft
 from subprocess import Popen, PIPE, STDOUT
 from glob import iglob
 from time import time, sleep, strptime, mktime
 from calendar import timegm
 from datetime import datetime, timedelta
-from simplejson import loads, dumps
 from xattr import xattr
 import os, sys, socket, struct
+
+from graphite_metrics.utils import dev_resolve
+
+try: from simplejson import loads, dumps
+except ImportError: from json import loads, dumps
+
+import logging
+log = logging.getLogger()
 
 
 class CarbonClient(object):
@@ -78,31 +66,6 @@ class CarbonClient(object):
 				log.error('Failed to send data to Carbon server: {}'.format(err))
 				self.reconnect()
 
-
-def dev_resolve( major, minor,
-		log_fails=True, _cache = dict(), _cache_time=600 ):
-	ts_now = time()
-	while True:
-		if not _cache: ts = 0
-		else:
-			dev = major, minor
-			dev_cached, ts = (None, _cache[None])\
-				if dev not in _cache else _cache[dev]
-		# Update cache, if necessary
-		if ts_now > ts + _cache_time:
-			_cache.clear()
-			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
-				link_name = os.path.basename(link)
-				try: link_dev = os.stat(link).st_rdev
-				except OSError: continue # EPERM, EINVAL
-				_cache[(os.major(link_dev), os.minor(link_dev))] = link_name, ts_now
-			_cache[None] = ts_now
-			continue # ...and try again
-		if dev_cached: dev_cached = dev_cached.replace('.', '_')
-		elif log_fails:
-			log.warn( 'Unable to resolve device'
-				' from major/minor numbers: {}:{}'.format(major, minor) )
-		return dev_cached
 
 def process_entry(entry, _sector_bytes=512):
 
@@ -190,7 +153,8 @@ def process_entry(entry, _sector_bytes=512):
 
 	return ts, interval, metrics
 
-def read_data( ts_to=None, max_past_days=7,
+
+def read_data( optz, ts_to=None, max_past_days=7,
 		sa_path='/var/log/sa', xattr_name='user.sa_carbon.pos' ):
 	if not ts_to: ts_to = datetime.now()
 
@@ -275,15 +239,37 @@ def read_data( ts_to=None, max_past_days=7,
 			if not optz.dry_run: sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
 
 
-def dispatch_data(remote, data):
+def dispatch_data(remote, data, dry_run=False, dump=False):
 	log.debug('Establishing carbon server ({}) link'.format(remote))
 	link = CarbonClient(remote)
 	for name, val, ts in data:
 		metric = '.'.join(name), val, int(ts)
-		if optz.debug_data: log.debug('Dispatching metric: {} {} {}'.format(*metric))
-		if not optz.dry_run: link.send(*metric)
+		if dump: log.debug('Dispatching metric: {} {} {}'.format(*metric))
+		if dry_run: link.send(*metric)
 	log.debug('Severing carbon server link')
 	link.close()
 
 
-dispatch_data((optz.host, optz.port), read_data())
+def main():
+	import argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument('host', help='Carbon host to send data to.')
+	parser.add_argument('-p', '--port', type=int, default=2003,
+		help='Carbon line-receiver (tcp) port (default: %(default)s).')
+	parser.add_argument('-i', '--force-interval', type=int,
+		help='Discard datapoints for intervals (with a warning), different from this one.')
+	parser.add_argument('-n', '--dry-run', action='store_true', help='Dry-run mode.')
+	parser.add_argument('--strict', action='store_true', help='Bail out on some common sysstat bugs.')
+	parser.add_argument('--debug', action='store_true', help='Dump a lot of debug info.')
+	parser.add_argument('--debug-data', action='store_true', help='Dump processed datapoints.')
+	optz = parser.parse_args()
+
+	logging.basicConfig(
+		level=logging.WARNING if not optz.debug else logging.DEBUG,
+		format='%(levelname)s :: %(name)s :: %(message)s' )
+
+	dispatch_data(
+		(optz.host, optz.port), read_data(optz),
+		dry_run=optz.dry_run, dump=optz.debug_data )
+
+if __name__ == '__main__': main()
