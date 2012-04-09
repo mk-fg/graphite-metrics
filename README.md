@@ -1,6 +1,7 @@
 graphite-metrics: standalone graphite collectors for various stuff not (or poorly) handled by other monitoring daemons
 --------------------
 
+
 ### sa_carbon
 
 Script to run once-in-a-while (from 1 min to 1 month) to push data, collected by
@@ -8,6 +9,26 @@ Script to run once-in-a-while (from 1 min to 1 month) to push data, collected by
 
 Uses `sadf -j` json export for /var/log/sa files, collected by sysstat, usually
 by sadc (in my case - `sadc -F -L -S DISK -S XDISK -S POWER 60`).
+
+	% sa_carbon -h
+	usage: sa_carbon [-h] [-p PORT] [-i FORCE_INTERVAL] [-n] [--strict]
+	                    [--debug] [--debug-data]
+	                    host
+
+	positional arguments:
+	  host                  Carbon host to send data to.
+
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  -p PORT, --port PORT  Carbon tcp line-receiver port (default: 2003).
+	  -i FORCE_INTERVAL, --force-interval FORCE_INTERVAL
+	                        Discard datapoints for intervals (with a warning),
+	                        different from this one.
+	  -n, --dry-run         Dry-run mode.
+	  --strict              Bail out on some common sysstat bugs.
+	  --debug               Dump a lot of debug info.
+	  --debug-data          Dump processed datapoints.
+
 
 ### harvestd
 
@@ -25,10 +46,25 @@ Consists of various components for processing of:
 	separate metrics, adapts jobs to metric names with regexes.
 * Per-system-service accounting using systemd cgroups.
 
-Plan is to split all this accumulated stuff into separate binaries, maybe
-feeding data to statsd, not carbon, although I don't see enough benefit there,
-which can justify added fail and complexity.
-That's what the project is mostly for.
+Additional metric collectors can be added via setuptools
+graphite_metrics.collectors entry point.
+Look at shipped collectors for API examples.
+
+	% harvestd -h
+	usage: harvestd [-h] [-i INTERVAL] [-n] [--debug] remote
+
+	Collect and dispatch various metrics to carbon daemon.
+
+	positional arguments:
+	  remote                host[:port] (default port: 2003) of carbon tcp line-
+	                        receiver destination.
+
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  -i INTERVAL, --interval INTERVAL
+	                        Interval between datapoints (default: 60).
+	  -n, --dry-run         Do not actually send data.
+	  --debug               Verbose operation mode.
 
 
 Rationale
