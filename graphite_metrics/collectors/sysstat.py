@@ -8,7 +8,10 @@ from datetime import datetime, timedelta
 from xattr import xattr
 import os, sys, socket, struct
 
-from . import Collector, Datapoint, dev_resolve, sector_bytes
+from . import Collector, Datapoint, dev_resolve, sector_bytes, rate_limit
+
+try: from simplejson import loads, dumps
+except ImportError: from json import loads, dumps
 
 import logging
 log = logging.getLogger(__name__)
@@ -48,8 +51,8 @@ class SADF(Collector):
 					(prefix + ['utilization'], disk['util-percent']),
 					(prefix + ['req_size'], disk['avgrq-sz']),
 					(prefix + ['queue_len'], disk['avgqu-sz']),
-					(prefix + ['bytes_read'], _sector_bytes * disk['rd_sec']),
-					(prefix + ['bytes_write'], _sector_bytes * disk['wr_sec']),
+					(prefix + ['bytes_read'], sector_bytes * disk['rd_sec']),
+					(prefix + ['bytes_write'], sector_bytes * disk['wr_sec']),
 					(prefix + ['serve_time'], disk['await']),
 					(prefix + ['tps'], disk['tps']) ])
 
@@ -178,7 +181,7 @@ class SADF(Collector):
 						continue
 					ts_val = int(ts)
 					for name, val in metrics:
-						yield '.'.join(name), 'gauge', val, ts_val
+						yield Datapoint('.'.join(name), 'gauge', val, ts_val)
 					ts -= 1 # has to be *before* beginning of the next interval
 					if ts > sa_ts_max: sa_ts_max = ts
 
@@ -189,7 +192,10 @@ class SADF(Collector):
 
 
 	def read(self):
-		return self._read() if next(self.rate_limit) else list()
+		if next(self.rate_limit):
+			log.debug('Running sysstat data processing cycle')
+			return self._read()
+		else: return list()
 
 
 collector = SADF
