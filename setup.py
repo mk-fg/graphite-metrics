@@ -16,7 +16,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.4',
+	version = '12.04.6',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -45,9 +45,7 @@ setup(
 	include_package_data = True,
 
 	entry_points = {
-		'console_scripts': [
-			'harvestd = graphite_metrics.harvestd:main',
-			'sa_carbon = graphite_metrics.sa_carbon:main' ],
+		'console_scripts': ['harvestd = graphite_metrics.harvestd:main'],
 		'graphite_metrics.collectors': list(
 			'{0} = graphite_metrics.collectors.{0}'.format(name[:-3])
 			for name in it.imap(os.path.basename, iglob(os.path.join(

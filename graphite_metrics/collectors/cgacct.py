@@ -6,8 +6,7 @@ from contextlib import contextmanager
 from io import open
 import os, re, dbus, fcntl, stat
 
-from graphite_metrics.utils import dev_resolve
-from . import Collector, Datapoint, user_hz
+from . import Collector, Datapoint, user_hz, dev_resolve
 
 import logging
 log = logging.getLogger(__name__)

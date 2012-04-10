@@ -2,6 +2,7 @@
 
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple
+from glob import iglob
 from time import time
 import os
 
@@ -12,9 +13,55 @@ log = logging.getLogger(__name__)
 page_size = os.sysconf('SC_PAGE_SIZE')
 page_size_kb = page_size // 1024
 user_hz = os.sysconf('SC_CLK_TCK')
+sector_bytes = 512
 
 
-class Collector(object): pass
+def rate_limit(max_interval=20, sampling=3, f=lambda x: x):
+	'''x rises by 1 from 0 on each iteraton, back to 0 on triggering.
+		f(x) should converge on f(max_interval) in some way (with default
+			"f(x)=x" probability rises lineary with 100% chance on "x=max_interval").
+		"sampling" affect probablility in an "c=1-(1-c0)*(1-c1)*...*(1-cx)" exponential way.'''
+	from random import random
+	val = 0
+	val_max = float(f(max_interval))
+	while True:
+		if val % sampling == 0:
+			trigger = random() > (val_max - f(val)) / val_max
+			if trigger: val = 0
+			yield trigger
+		else: yield False
+		val += 1
+
+
+def dev_resolve( major, minor,
+		log_fails=True, _cache = dict(), _cache_time=600 ):
+	ts_now = time()
+	while True:
+		if not _cache: ts = 0
+		else:
+			dev = major, minor
+			dev_cached, ts = (None, _cache[None])\
+				if dev not in _cache else _cache[dev]
+		# Update cache, if necessary
+		if ts_now > ts + _cache_time:
+			_cache.clear()
+			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
+				link_name = os.path.basename(link)
+				try: link_dev = os.stat(link).st_rdev
+				except OSError: continue # EPERM, EINVAL
+				_cache[(os.major(link_dev), os.minor(link_dev))] = link_name, ts_now
+			_cache[None] = ts_now
+			continue # ...and try again
+		if dev_cached: dev_cached = dev_cached.replace('.', '_')
+		elif log_fails:
+			log.warn( 'Unable to resolve device'
+				' from major/minor numbers: {}:{}'.format(major, minor) )
+		return dev_cached
+
+
+class Collector(object):
+
+	def __init__(self, **optz): pass
 
 
 class Datapoint(namedtuple('Value', 'name type value ts')):
