@@ -14,23 +14,32 @@ log = logging.getLogger(__name__)
 
 class CGAcct(Collector):
 
-	cg_root = '/sys/fs/cgroup'
-	stuck_list = os.path.join(cg_root, 'sticky.cgacct')
-
 
 	def __init__(self, *argz, **kwz):
 		super(CGAcct, self).__init__(*argz, **kwz)
-		# TODO: processing of self.conf
+
+		self.stuck_list = os.path.join(self.conf.cg_root, 'sticky.cgacct')
 
 		# Check which info is available, if any
-		self._collectors = list()
-		for rc in os.listdir(self.cg_root):
+		self.rc_collectors = list()
+		for rc in self.conf.resource_controllers:
 			try: rc_collector = getattr(self, rc)
-			except AttributeError: continue
-			if not os.path.ismount(os.path.join(self.cg_root, rc) + '/'): continue
-			log.debug('Adding cgroup collector: {}'.format(rc))
-			self._collectors.append(rc_collector)
-		if not self._collectors: return # no point doing anything else
+			except AttributeError:
+				log.warn( 'Unable to find processor'
+					' method for rc {!r} metrics, skipping it'.format(rc) )
+				continue
+			rc_path = os.path.join(self.conf.cg_root, rc)
+			if not os.path.ismount(rc_path + '/'):
+				log.warn(( 'Specified rc path ({}) does not'
+					' seem to be a mountpoint, skipping it' ).format(rc_path))
+				continue
+			log.debug('Using cgacct collector for rc: {}'.format(rc))
+			self.rc_collectors.append(rc_collector)
+
+		if not self.rc_collectors: # no point doing anything else
+			self.conf.enabled = False
+			return
+
 		# List of cgroup sticky bits, set by this service
 		self._stuck_list_file = open(self.stuck_list, 'ab+')
 		self._stuck_list = dict()
@@ -42,22 +51,19 @@ class CGAcct(Collector):
 			self._stuck_list[rc].add(svc)
 
 
-	@classmethod
-	def _cg_svc_dir(cls, rc, svc=None):
-		path = os.path.join(cls.cg_root, rc)
+	def _cg_svc_dir(self, rc, svc=None):
+		path = os.path.join(self.conf.cg_root, rc)
 		if not svc: return path
 		svc = svc.rsplit('@', 1)
 		return os.path.join(path, 'system/{}.service'.format(svc[0] + '@'), svc[1])\
 			if len(svc) > 1 else os.path.join(path, 'system/{}.service'.format(svc[0]))
 
-	@classmethod
-	def _cg_svc_metrics(cls, rc, metric, svc_instances):
-		return (os.path.join( cls._cg_svc_dir(rc, svc),
+	def _cg_svc_metrics(self, rc, metric, svc_instances):
+		return (os.path.join( self._cg_svc_dir(rc, svc),
 			'{}.{}'.format(rc, metric) ) for svc in svc_instances)
 
-	@classmethod
 	@contextmanager
-	def _cg_metric(cls, path, **kwz):
+	def _cg_metric(self, path, **kwz):
 		try:
 			with open(path, mode='rb', **kwz) as src: yield src
 		except (OSError, IOError) as err:
@@ -285,9 +291,9 @@ class CGAcct(Collector):
 
 
 	def read(self):
-		if not self._collectors: return # save dbus calls
 		services = list(self._systemd_services())
-		for dp in it.chain.from_iterable(func(services) for func in self._collectors): yield dp
+		for dp in it.chain.from_iterable(
+			func(services) for func in self.rc_collectors ): yield dp
 
 
 collector = CGAcct

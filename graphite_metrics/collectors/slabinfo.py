@@ -13,19 +13,12 @@ log = logging.getLogger(__name__)
 class SlabInfo(Collector):
 
 	version_check = '2.1'
-	include_prefixes = list()
-	exclude_prefixes = ['kmalloc-', 'kmem_cache', 'dma-kmalloc-']
-	pass_zeroes = False
 
 	def __init__(self, *argz, **kwz):
 		super(SlabInfo, self).__init__(*argz, **kwz)
 
-		# TODO: processing of self.conf
-		# _no_value = object()
-		# for k,v in kwz:
-		# 	if getattr(self, k, _no_value) is _no_value:
-		# 		raise KeyError('Unrecognized option: {}'.format(k))
-		# 	setattr(self, k, v)
+		for k in 'include_prefixes', 'exclude_prefixes':
+			if not self.conf.get(k): self.conf[k] = list()
 
 		with open('/proc/slabinfo', 'rb') as table:
 			line = table.readline()
@@ -55,10 +48,10 @@ class SlabInfo(Collector):
 			table.readline(), table.readline() # header
 			for line in table:
 				info = parse_line(line)
-				for prefix in self.include_prefixes:
+				for prefix in self.conf.include_prefixes:
 					if info.name.startswith(prefix): break # force-include
 				else:
-					for prefix in self.exclude_prefixes:
+					for prefix in self.conf.exclude_prefixes:
 						if info.name.startswith(prefix):
 							info = None
 							break
@@ -67,7 +60,7 @@ class SlabInfo(Collector):
 						('obj_active', info.active_objs * info.objsize),
 						('slab_active', info.active_slabs * info.pagesperslab * ps),
 						('slab_allocated', info.num_slabs * info.pagesperslab * ps) ]
-					if self.pass_zeroes or sum(it.imap(op.itemgetter(1), vals)) != 0:
+					if self.conf.pass_zeroes or sum(it.imap(op.itemgetter(1), vals)) != 0:
 						for val_name, val in vals:
 							yield Datapoint( 'memory.slabs.{}.bytes_{}'\
 								.format(info.name, val_name), 'gauge', val, None )

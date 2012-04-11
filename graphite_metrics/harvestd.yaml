@@ -6,13 +6,39 @@ collectors:
   _default:
     enabled: true
     # debug: # auto-filled from global "debug" section, if not specified
+
+  cron_log:
+    source: # must be filled with path to a log file
+    aliases: # either [alias, regexp] or ["_" + regexp_group, regexp], see "_script" example below
+      # - ['logrotate', '(^|\b)logrotate\b']
+      # - ['locate', '(^|\b)updatedb\b']
+      # - ['_script', '/etc/cron\.\w+/*(?P<script>\S+)(\s+|$)']
+    lines: # only named regexp groups here are mandatory, all lines are optional
+      init: 'task\[(\d+|-)\]: Queued\b[^:]*: (?P<job>.*)$'
+      start: 'task\[(\d+|-)\]: Started\b[^:]*: (?P<job>.*)$'
+      finish: 'task\[(\d+|-)\]: Finished\b[^:]*: (?P<job>.*)$'
+      duration: 'task\[(\d+|-)\]: Finished \([^):]*\bduration=(?P<val>\d+)[,)][^:]*: (?P<job>.*)$'
+      error: 'task\[(\d+|-)\]: Finished \([^):]*\bstatus=0*[^0]+0*[,)][^:]*: (?P<job>.*)$'
+    xattr_name: user.collectd.logtail.pos # used to mark "last position" in sa logs
+
+  slabinfo:
+    include_prefixes: # takes priority over exclude_prefixes
+    exclude_prefixes: ['kmalloc-', 'kmem_cache', 'dma-kmalloc-']
+    pass_zeroes: False # to skip creating a lot metrics for always-0 (for particular hosts) slab counts
+
+  cgacct:
+    cg_root: /sys/fs/cgroup
+    resource_controllers: ['cpuacct', 'memory', 'blkio'] # mapped to methods in cgacct.py
+
   sysstat:
     force_interval: true # skip intervals of different length than core.interval
     force_interval_fuzz: 10 # +/- % to consider acceptable interval fuzz
+    sa_path: /var/log/sa
     rate: # see "graphite_metrics.collectors.rate_limit"
       limiting_enabled: true
       max_interval: 30 # cycles
       sampling: 3
+    xattr_name: user.sa_carbon.pos # used to mark "last position" in sa logs
 
 
 core:

@@ -131,14 +131,13 @@ class SADF(Collector):
 		return ts, interval, metrics
 
 
-	def _read( self, ts_to=None, max_past_days=7,
-			sa_path='/var/log/sa', xattr_name='user.sa_carbon.pos' ):
+	def _read(self, ts_to=None, max_past_days=7):
 		if not ts_to: ts_to = datetime.now()
 
 		sa_days = dict( (ts.day, ts) for ts in
 			((ts_to - timedelta(i)) for i in xrange(max_past_days+1)) )
 		sa_files = sorted(it.ifilter(
-			op.methodcaller('startswith', 'sa'), os.listdir(sa_path) ))
+			op.methodcaller('startswith', 'sa'), os.listdir(self.conf.sa_path) ))
 		host = os.uname()[1] # to check vs nodename in data
 		log.debug('SA files to process: {}'.format(sa_files))
 
@@ -148,12 +147,12 @@ class SADF(Collector):
 			except KeyError: continue # too old or new
 			sa_ts_to = None # otherwise it's possible to get data for the oldest day in a file
 
-			sa = os.path.join(sa_path, sa)
+			sa = os.path.join(self.conf.sa_path, sa)
 			log.debug('Processing file: {}'.format(sa))
 
 			# Read xattr timestamp
 			sa_xattr = xattr(sa)
-			try: sa_ts_from = sa_xattr[xattr_name]
+			try: sa_ts_from = sa_xattr[self.conf.xattr_name]
 			except KeyError: sa_ts_from = None
 			if sa_ts_from:
 				sa_ts_from = datetime.fromtimestamp(
@@ -210,7 +209,7 @@ class SADF(Collector):
 			if sa_ts_max:
 				log.debug('Updating xattr timestamp to {}'.format(sa_ts_max))
 				if not self.conf.debug.dry_run:
-					sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
+					sa_xattr[self.conf.xattr_name] = struct.pack('=I', int(sa_ts_max))
 
 
 	def read(self):

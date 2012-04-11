@@ -9,6 +9,7 @@ import os, sys, socket
 
 
 class AttrDict(dict):
+
 	def __init__(self, *argz, **kwz):
 		for k,v in dict(*argz, **kwz).iteritems(): self[k] = v
 

@@ -134,42 +134,28 @@ def file_follow_durable( path,
 
 class CronJobs(Collector):
 
-	log = '/var/log/processing/cron.log'
-
-	lines = dict(
-		init = r'task\[(\d+|-)\]: Queued\b[^:]*: (?P<job>.*)$',
-		start = r'task\[(\d+|-)\]: Started\b[^:]*: (?P<job>.*)$',
-		finish = r'task\[(\d+|-)\]: Finished\b[^:]*: (?P<job>.*)$',
-		duration = r'task\[(\d+|-)\]:'\
-			r' Finished \([^):]*\bduration=(?P<val>\d+)[,)][^:]*: (?P<job>.*)$',
-		error = r'task\[(\d+|-)\]:'\
-			r' Finished \([^):]*\bstatus=0*[^0]+0*[,)][^:]*: (?P<job>.*)$' )
-
-	aliases = [
-		('logrotate', r'(^|\b)logrotate\b'),
-		('locate', r'(^|\b)updatedb\b'),
-		('backup_grab', r'\bfs_backup\b'),
-		('backup_toss', r'\btoss_cron\b'),
-		('ufs_sync', r'\bufs\.sync\b'),
-		('getmail', r'\bgetmail\.service\b'),
-		('maildir_maintenance', r'\bmaildir_git\b'),
-		('forager_music', r'\bforager_music\.py\b'),
-		('forager_scm', r'\bforager_scm\.py\b'),
-		('feedjack_update', r'\bfeedjack_update\.py\b'),
-		('sync_distfiles', r'\bsync_distfiles\b'),
-		('atop_rotate', r'\batop\.service\b'),
-		('sa_carbon', r'\bsa_carbon\b'),
-		('_name', r'\bsystemd: \S+ (?P<name>\S+)\b'),
-		('_name', r'/etc/(\S+/)*(?P<name>\S+)(\s+|$)') ]
+	lines, aliases = dict(), list()
 
 	def __init__(self, *argz, **kwz):
 		super(CronJobs, self).__init__(*argz, **kwz)
 
-		# TODO: processing of self.conf
+		try:
+			log, self.lines, self.aliases =\
+				op.attrgetter('source', 'lines', 'aliases')(self.conf)
+			if not (log and self.lines and self.aliases): raise KeyError()
+		except KeyError as err:
+			if err.args:
+				log.error('Failed to get required config parameter "{}"'.format(err.args[0]))
+			else:
+				log.warn( 'Collector requires all of "source",'
+					' "lines" and "aliases" specified to work properly' )
+			self.conf.enabled = False
+			return
+
 		for k,v in self.lines.viewitems(): self.lines[k] = re.compile(v)
 		for idx,(k,v) in enumerate(self.aliases): self.aliases[idx] = k, re.compile(v)
-		self.log_tailer = file_follow_durable(
-			self.log, read_interval_min=None )
+		self.log_tailer = file_follow_durable( log,
+			xattr_name=self.conf.xattr_name, read_interval_min=None )
 
 	def read(self, _re_sanitize=re.compile('\s+|-')):
 		# Cron
