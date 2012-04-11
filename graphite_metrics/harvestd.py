@@ -150,8 +150,12 @@ def main():
 			' Values from the latter ones override values in the former.'
 			' Available CLI options override the values in any config.')
 
-	parser.add_argument('-n', '--dry-run', action='store_true', help='Do not actually send data.')
-	parser.add_argument('--debug', action='store_true', help='Verbose operation mode.')
+	parser.add_argument('-n', '--dry-run',
+		action='store_true', help='Do not actually send data.')
+	parser.add_argument('--debug-data', action='store_true',
+		help='Log datapoints that are (unless --dry-run is used) sent to carbon.')
+	parser.add_argument('--debug',
+		action='store_true', help='Verbose operation mode.')
 	optz = parser.parse_args()
 
 	# Read configuration files
@@ -176,6 +180,8 @@ def main():
 		cfg.carbon.host = cfg.carbon.host[0], cfg.carbon.default_port
 	else: cfg.carbon.host[1] = int(cfg.carbon.host[1])
 	if optz.interval: cfg.core.interval = optz.interval
+	if optz.dry_run: cfg.debug.dry_run = optz.dry_run
+	if optz.debug_data: cfg.debug.dump = optz.debug_data
 
 	# Override "enabled" parameters, based on CLI
 	conf_base = cfg.collectors._default
@@ -189,7 +195,6 @@ def main():
 	for name in optz.disable:
 		if name not in cfg.collectors: cfg.collectors[name] = dict()
 		cfg.collectors[name]['enabled'] = False
-	if optz.dry_run: cfg.debug.dry_run = optz.dry_run
 	if 'debug' not in conf_base: conf_base['debug'] = cfg.debug
 
 	# Init global cfg for collectors' usage
@@ -231,6 +236,13 @@ def main():
 		ts_now = time()
 
 		log.debug('Sending {} datapoints'.format(len(data)))
+		if cfg.debug.dump:
+			for dp in data:
+				dp = dp.get(ts=ts_now)
+				if dp is None: continue
+				name, value, ts_dp = dp
+				log.info('Datapoint: {} {} {}'.format(
+					'{}.{}'.format(cfg.core.hostname, name), value, int(ts_dp) ))
 		if not cfg.debug.dry_run: link.send(ts_now, *data)
 
 		while ts < ts_now: ts += cfg.core.interval

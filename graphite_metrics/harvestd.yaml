@@ -66,7 +66,7 @@ carbon:
 
 debug:
   dry_run: false
-  # dump_data: false # TODO?
+  dump: false
 
 
 logging: # see http://docs.python.org/library/logging.config.html
