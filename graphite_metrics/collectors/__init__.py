@@ -15,6 +15,11 @@ page_size_kb = page_size // 1024
 user_hz = os.sysconf('SC_CLK_TCK')
 sector_bytes = 512
 
+# Global configuration for harvestd,
+#  intended to be set before initializing collectors,
+#  but should not be really relied upon - can be empty.
+cfg = dict()
+
 
 def rate_limit(max_interval=20, sampling=3, f=lambda x: x):
 	'''x rises by 1 from 0 on each iteraton, back to 0 on triggering.
@@ -61,7 +66,8 @@ def dev_resolve( major, minor,
 
 class Collector(object):
 
-	def __init__(self, **optz): pass
+	def __init__(self, conf):
+		self.conf = conf
 
 
 class Datapoint(namedtuple('Value', 'name type value ts')):

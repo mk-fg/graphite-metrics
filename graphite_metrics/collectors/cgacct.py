@@ -18,7 +18,10 @@ class CGAcct(Collector):
 	stuck_list = os.path.join(cg_root, 'sticky.cgacct')
 
 
-	def __init__(self):
+	def __init__(self, *argz, **kwz):
+		super(CGAcct, self).__init__(*argz, **kwz)
+		# TODO: processing of self.conf
+
 		# Check which info is available, if any
 		self._collectors = list()
 		for rc in os.listdir(self.cg_root):

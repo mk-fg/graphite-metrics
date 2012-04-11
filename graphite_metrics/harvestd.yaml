@@ -1,0 +1,62 @@
+### Default (baseline) configuration parameters.
+### DO NOT ever change this config, use -c commandline option instead!
+
+
+collectors:
+  _default:
+    enabled: true
+    # debug: # auto-filled from global "debug" section, if not specified
+  sysstat:
+    force_interval: true # skip intervals of different length than core.interval
+    force_interval_fuzz: 10 # +/- % to consider acceptable interval fuzz
+    rate: # see "graphite_metrics.collectors.rate_limit"
+      limiting_enabled: true
+      max_interval: 30 # cycles
+      sampling: 3
+
+
+core:
+  hostname: # derived from uname() if empty, used to prefix metric names
+  interval: 60 # seconds
+  # self_profiling: # TODO
+  #   main_loop: true
+  #   collectors: true
+
+carbon:
+  host: localhost # can be specified as "host[:port]"
+  default_port: 2003
+  max_reconnects: # before bailing out with the error
+  reconnect_delay: 5 # seconds
+
+debug:
+  dry_run: false
+  # dump_data: false # TODO?
+
+
+logging: # see http://docs.python.org/library/logging.config.html
+  # "custom" level means WARNING or DEBUG, depending on CLI options
+  warnings: true # capture python warnings
+  tracebacks: true # much easier to debug with these, but noisy and multiline
+  version: 1
+  formatters:
+    basic:
+      format: '%(asctime)s :: %(levelname)s :: %(name)s: %(message)s'
+      datefmt: '%Y-%m-%d %H:%M:%S'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      stream: ext://sys.stdout
+      formatter: basic
+      level: custom
+    # file:
+    #   class: logging.handlers.WatchedFileHandler
+    #   filename: /var/log/harvestd.log
+    #   formatter: basic
+    #   encoding: utf-8
+    #   level: DEBUG
+  # loggers:
+  #   graphite_metrics.collectors.irq:
+  #     level: ERROR
+  root:
+    handlers: [console]
+    level: custom

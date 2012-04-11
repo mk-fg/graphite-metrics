@@ -17,12 +17,16 @@ class SlabInfo(Collector):
 	exclude_prefixes = ['kmalloc-', 'kmem_cache', 'dma-kmalloc-']
 	pass_zeroes = False
 
-	def __init__(self, **kwz):
-		_no_value = object()
-		for k,v in kwz:
-			if getattr(self, k, _no_value) is _no_value:
-				raise KeyError('Unrecognized option: {}'.format(k))
-			setattr(self, k, v)
+	def __init__(self, *argz, **kwz):
+		super(SlabInfo, self).__init__(*argz, **kwz)
+
+		# TODO: processing of self.conf
+		# _no_value = object()
+		# for k,v in kwz:
+		# 	if getattr(self, k, _no_value) is _no_value:
+		# 		raise KeyError('Unrecognized option: {}'.format(k))
+		# 	setattr(self, k, v)
+
 		with open('/proc/slabinfo', 'rb') as table:
 			line = table.readline()
 			self.version = line.split(':')[-1].strip()

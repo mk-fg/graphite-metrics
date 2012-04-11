@@ -20,9 +20,28 @@ log = logging.getLogger(__name__)
 class SADF(Collector):
 
 
-	def __init__(self, force_interval=60, dry_run=False):
-		self.force_interval, self.dry_run = force_interval, dry_run
-		self.rate_limit = rate_limit(max_interval=30, sampling=3)
+	def __init__(self, *argz, **kwz):
+		super(SADF, self).__init__(*argz, **kwz)
+
+		# Set force_interval margins, if used
+		if self.conf.force_interval:
+			from . import cfg
+			try: interval = cfg.core.interval
+			except (KeyError, AttributeError):
+				log.warn( 'Failed to apply force_interval option'
+					' - unable to access global configuration to get data collection interval' )
+				self.force_interval = None
+			else:
+				if self.conf.force_interval_fuzz:
+					fuzz = interval * self.conf.force_interval_fuzz / 100.0
+				else: fuzz = 0
+				self.force_interval = interval - fuzz, interval + fuzz
+		else: self.force_interval = None
+
+		self.rate_limit = rate_limit(
+				max_interval=self.conf.rate.max_interval,
+				sampling=self.conf.rate.sampling )\
+			if self.conf.rate.limiting_enabled else None
 
 
 	def process_entry(self, entry):
@@ -174,10 +193,12 @@ class SADF(Collector):
 						log.warn( 'Dropping sample because of timestamp mismatch'
 							' (timestamp: {}, expected date: {})'.format(ts, sa_day_ts) )
 						continue
-					if self.force_interval and interval != self.force_interval:
+					if self.force_interval and (
+							interval < self.force_interval[0]
+							or interval > self.force_interval[1] ):
 						log.warn( 'Dropping sample because of interval mismatch'
-							' (interval: {}, required: {}, timestamp: {})'.format(
-								interval, self.force_interval, ts ) )
+							' (interval: {interval}, required: {margins[0]}-{margins[1]}, timestamp: {ts})'\
+								.format(interval=interval, ts=ts, margins=self.force_interval) )
 						continue
 					ts_val = int(ts)
 					for name, val in metrics:
@@ -188,11 +209,12 @@ class SADF(Collector):
 			# Update xattr timestamp, if any entries were processed
 			if sa_ts_max:
 				log.debug('Updating xattr timestamp to {}'.format(sa_ts_max))
-				if not self.dry_run: sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
+				if not self.conf.debug.dry_run:
+					sa_xattr[xattr_name] = struct.pack('=I', int(sa_ts_max))
 
 
 	def read(self):
-		if next(self.rate_limit):
+		if not self.rate_limit or next(self.rate_limit):
 			log.debug('Running sysstat data processing cycle')
 			return self._read()
 		else: return list()

@@ -162,7 +162,10 @@ class CronJobs(Collector):
 		('_name', r'\bsystemd: \S+ (?P<name>\S+)\b'),
 		('_name', r'/etc/(\S+/)*(?P<name>\S+)(\s+|$)') ]
 
-	def __init__(self):
+	def __init__(self, *argz, **kwz):
+		super(CronJobs, self).__init__(*argz, **kwz)
+
+		# TODO: processing of self.conf
 		for k,v in self.lines.viewitems(): self.lines[k] = re.compile(v)
 		for idx,(k,v) in enumerate(self.aliases): self.aliases[idx] = k, re.compile(v)
 		self.log_tailer = file_follow_durable(
