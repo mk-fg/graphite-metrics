@@ -4,7 +4,7 @@ import itertools as it, operator as op, functools as ft
 from subprocess import Popen, PIPE
 from collections import namedtuple, defaultdict
 from io import open
-import os
+import os, errno
 
 from . import Collector, Datapoint
 
@@ -41,9 +41,10 @@ class IPTables(Collector):
 		for v in 'ipv4', 'ipv6':
 			path = self.conf.rule_metrics_path[v]
 			try:
-				if not path: raise OSError
+				if not path: raise OSError()
 				mtime = os.stat(path).st_mtime
-			except OSError:
+			except (OSError, IOError) as err:
+				if err.args and err.errno != errno.ENOENT: raise # to raise EPERM, EACCES and such
 				self._rule_metrics_cache[v] = None
 				continue
 			cache = self._rule_metrics_cache.get(v)
