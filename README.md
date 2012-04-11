@@ -29,26 +29,26 @@ Running
 --------------------
 
 	% harvestd -h
-	usage: harvestd [-h] [-t CARBON] [-i INTERVAL] [-e ENABLE] [-d DISABLE]
-	                [-c CONFIG] [-n] [--debug]
+	usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
+	                [-d collector] [-c path] [-n] [--debug]
 
 	Collect and dispatch various metrics to carbon daemon.
 
 	optional arguments:
 	  -h, --help            show this help message and exit
-	  -t CARBON, --carbon CARBON
+	  -t host[:port], --carbon host[:port]
 	                        host[:port] (default port: 2003, can be overidden via
 	                        config file) of carbon tcp line-receiver destination.
-	  -i INTERVAL, --interval INTERVAL
-	                        Interval between collecting (and sending) the
-	                        datapoints (default: 60).
-	  -e ENABLE, --enable ENABLE
+	  -i seconds, --interval seconds
+	                        Interval between collecting and sending the
+	                        datapoints.
+	  -e collector, --enable collector
 	                        Enable only the specified metric collectors, can be
 	                        specified multiple times.
-	  -d DISABLE, --disable DISABLE
+	  -d collector, --disable collector
 	                        Explicitly disable specified metric collectors, can be
 	                        specified multiple times. Overrides --enabled.
-	  -c CONFIG, --config CONFIG
+	  -c path, --config path
 	                        Configuration files to process. Can be specified more
 	                        than once. Values from the latter ones override values
 	                        in the former. Available CLI options override the

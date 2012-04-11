@@ -128,23 +128,23 @@ def main():
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Collect and dispatch various metrics to carbon daemon.')
-	parser.add_argument('-t', '--carbon',
+	parser.add_argument('-t', '--carbon', metavar='host[:port]',
 		help='host[:port] (default port: 2003, can be overidden'
 			' via config file) of carbon tcp line-receiver destination.')
-	parser.add_argument('-i', '--interval', type=int, default=60,
-		help='Interval between collecting (and sending)'
-			' the datapoints (default: %(default)s).')
+	parser.add_argument('-i', '--interval', type=int, metavar='seconds',
+		help='Interval between collecting and sending the datapoints.')
 
 	parser.add_argument('-e', '--enable',
-		action='append', default=list(),
+		action='append', metavar='collector', default=list(),
 		help='Enable only the specified metric collectors,'
 				' can be specified multiple times.')
 	parser.add_argument('-d', '--disable',
-		action='append', default=list(),
+		action='append', metavar='collector', default=list(),
 		help='Explicitly disable specified metric collectors,'
 			' can be specified multiple times. Overrides --enabled.')
 
-	parser.add_argument('-c', '--config', action='append', default=list(),
+	parser.add_argument('-c', '--config',
+		action='append', metavar='path', default=list(),
 		help='Configuration files to process.'
 			' Can be specified more than once.'
 			' Values from the latter ones override values in the former.'
@@ -167,7 +167,7 @@ def main():
 	logging.captureWarnings(cfg.logging.warnings)
 	log = logging.getLogger(__name__)
 
-	# Fill "auto-detected" blanks in the configuration
+	# Fill "auto-detected" blanks in the configuration, CLI overrides
 	if not cfg.core.hostname:
 		cfg.core.hostname = os.uname()[1]
 	if optz.carbon: cfg.carbon.host = optz.carbon
@@ -175,6 +175,7 @@ def main():
 	if len(cfg.carbon.host) == 1:
 		cfg.carbon.host = cfg.carbon.host[0], cfg.carbon.default_port
 	else: cfg.carbon.host[1] = int(cfg.carbon.host[1])
+	if optz.interval: cfg.core.interval = optz.interval
 
 	# Override "enabled" parameters, based on CLI
 	conf_base = cfg.collectors._default
@@ -232,7 +233,7 @@ def main():
 		log.debug('Sending {} datapoints'.format(len(data)))
 		if not cfg.debug.dry_run: link.send(ts_now, *data)
 
-		while ts < ts_now: ts += optz.interval
+		while ts < ts_now: ts += cfg.core.interval
 		ts_sleep = max(0, ts - time())
 		log.debug('Sleep: {}s'.format(ts_sleep))
 		sleep(ts_sleep)
