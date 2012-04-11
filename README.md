@@ -24,21 +24,59 @@ Additional metric collectors can be added via setuptools
 graphite_metrics.collectors entry point.
 Look at shipped collectors for API examples.
 
+
+Running
+--------------------
+
 	% harvestd -h
-	usage: harvestd [-h] [-i INTERVAL] [-n] [--debug] remote
+	usage: harvestd [-h] [-t CARBON] [-i INTERVAL] [-e ENABLE] [-d DISABLE]
+	                [-c CONFIG] [-n] [--debug]
 
 	Collect and dispatch various metrics to carbon daemon.
 
-	positional arguments:
-	  remote                host[:port] (default port: 2003) of carbon tcp line-
-	                        receiver destination.
-
 	optional arguments:
 	  -h, --help            show this help message and exit
+	  -t CARBON, --carbon CARBON
+	                        host[:port] (default port: 2003, can be overidden via
+	                        config file) of carbon tcp line-receiver destination.
 	  -i INTERVAL, --interval INTERVAL
-	                        Interval between datapoints (default: 60).
+	                        Interval between collecting (and sending) the
+	                        datapoints (default: 60).
+	  -e ENABLE, --enable ENABLE
+	                        Enable only the specified metric collectors, can be
+	                        specified multiple times.
+	  -d DISABLE, --disable DISABLE
+	                        Explicitly disable specified metric collectors, can be
+	                        specified multiple times. Overrides --enabled.
+	  -c CONFIG, --config CONFIG
+	                        Configuration files to process. Can be specified more
+	                        than once. Values from the latter ones override values
+	                        in the former. Available CLI options override the
+	                        values in any config.
 	  -n, --dry-run         Do not actually send data.
 	  --debug               Verbose operation mode.
+
+See also: [default harvestd.yaml configuration
+file](https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml),
+which contains configuration for all loaded collectors and can/should be
+overidden using -c option.
+
+Note that you don't have to specify all the options in each override-config,
+just the ones you need to update.
+
+For example, simple-case configuration file (say, /etc/harvestd.yaml) just to
+specify carbon host and log lines format (dropping timestamp, since it will be
+piped to syslog or systemd-journal anyway) might look like this:
+
+	carbon:
+	  host: carbon.example.host
+
+	logging:
+	  formatters:
+	    basic:
+	      format: '%(levelname)s :: %(name)s: %(message)s'
+
+And be started like this: `harvestd -c /etc/harvestd.yaml`
 
 
 Rationale
