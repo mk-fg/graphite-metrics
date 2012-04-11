@@ -44,6 +44,7 @@ setup(
 	packages = find_packages(),
 	include_package_data = True,
 
+	package_data = {{'graphite_metrics': ['harvestd.yaml']}},
 	entry_points = {{
 		'console_scripts': ['harvestd = graphite_metrics.harvestd:main'],
 		'graphite_metrics.collectors': list(

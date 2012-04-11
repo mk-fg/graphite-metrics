@@ -16,7 +16,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.11',
+	version = '12.04.12',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -44,6 +44,7 @@ setup(
 	packages = find_packages(),
 	include_package_data = True,
 
+	package_data = {'graphite_metrics': ['harvestd.yaml']},
 	entry_points = {
 		'console_scripts': ['harvestd = graphite_metrics.harvestd:main'],
 		'graphite_metrics.collectors': list(
