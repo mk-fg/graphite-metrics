@@ -170,6 +170,7 @@ def main():
 		logging.DEBUG if optz.debug else logging.WARNING )
 	logging.captureWarnings(cfg.logging.warnings)
 	log = logging.getLogger(__name__)
+	if not cfg.logging.tracebacks: log.exception = log.error
 
 	# Fill "auto-detected" blanks in the configuration, CLI overrides
 	if not cfg.core.hostname:
@@ -213,12 +214,20 @@ def main():
 			if k not in conf: conf[k] = v
 		if conf.get('enabled', True):
 			log.debug('Loading collector: {}'.format(ep.name))
-			collector = ep.load().collector(conf)
+			try: collector = ep.load().collector(conf)
+			except Exception as err:
+				log.exception('Failed to load/init collector ({}): {}'.format(ep.name, err))
+				conf.enabled = False
 			if conf.get('enabled', True): collectors.add(collector)
 			else:
 				log.debug(( 'Collector {} (entry point: {})'
-					' has disabled itself after init' ).format(collector, ep.name))
+					' was disabled after init' ).format(collector, ep.name))
 	log.debug('Collectors: {}'.format(collectors))
+
+	# Sanity check
+	if not collectors:
+		log.fatal('No collectors were properly enabled/loaded, bailing out')
+		sys.exit(1)
 
 	# Carbon connection init
 	if not cfg.debug.dry_run:
@@ -232,7 +241,9 @@ def main():
 		data = list()
 		for collector in collectors:
 			log.debug('Polling data from a collector: {}'.format(collector))
-			data.extend(collector.read())
+			try: data.extend(collector.read())
+			except Exception as err:
+				log.exception('Failed to poll collector ({}): {}'.format(collector, err))
 		ts_now = time()
 
 		log.debug('Sending {} datapoints'.format(len(data)))
