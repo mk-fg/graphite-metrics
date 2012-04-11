@@ -1,39 +1,8 @@
 graphite-metrics: standalone graphite collectors for various stuff not (or poorly) handled by other monitoring daemons
 --------------------
 
-
-### sa_carbon
-
-Script to run once-in-a-while (from 1 min to 1 month) to push data, collected by
-[sysstat](http://sebastien.godard.pagesperso-orange.fr/) into graphite.
-
-Uses `sadf -j` json export for /var/log/sa files, collected by sysstat, usually
-by sadc (in my case - `sadc -F -L -S DISK -S XDISK -S POWER 60`).
-
-	% sa_carbon -h
-	usage: sa_carbon [-h] [-p PORT] [-i FORCE_INTERVAL] [-n] [--strict]
-	                    [--debug] [--debug-data]
-	                    host
-
-	positional arguments:
-	  host                  Carbon host to send data to.
-
-	optional arguments:
-	  -h, --help            show this help message and exit
-	  -p PORT, --port PORT  Carbon tcp line-receiver port (default: 2003).
-	  -i FORCE_INTERVAL, --force-interval FORCE_INTERVAL
-	                        Discard datapoints for intervals (with a warning),
-	                        different from this one.
-	  -n, --dry-run         Dry-run mode.
-	  --strict              Bail out on some common sysstat bugs.
-	  --debug               Dump a lot of debug info.
-	  --debug-data          Dump processed datapoints.
-
-
-### harvestd
-
-Simple daemon, which collects metric values and sends them to graphite once per
-interval.
+Core of the project is a simple daemon (harvestd), which collects metric values
+and sends them to graphite once per interval.
 
 Consists of various components for processing of:
 
@@ -101,3 +70,11 @@ complexity and fail that collectd provides.
 Other than collectd, I've experimented with
 [ganglia](http://ganglia.sourceforge.net/), but it's static schema is a no-go
 and most of stuff there doesn't make sense in graphite context.
+
+Daemon binary is (weirdly) called "harvestd" because "metricsd" name is already
+used to refer to [another graphite-related
+daemon](https://github.com/kpumuk/metricsd) (also, [there is "metrics" w/o
+"d"](https://github.com/codahale/metrics), probably others), and is too generic
+to be used w/o extra confusion, I think.
+That, and I seem to lack creativity to come up with a saner name ("reaperd"
+sounds too MassEffect'ish these days).
