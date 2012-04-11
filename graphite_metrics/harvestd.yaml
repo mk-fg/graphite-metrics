@@ -40,6 +40,16 @@ collectors:
       sampling: 3
     xattr_name: user.sa_carbon.pos # used to mark "last position" in sa logs
 
+  iptables_counts:
+    rule_metrics_path:
+      # Files with "chain_name rule_no metric_name" lines for iptables/ip6tables
+      ipv4: /var/lib/iptables/metrics.list
+      ipv6: /var/lib/ip6tables/metrics.list
+    # One of: pkt, bytes, both (metric.pkt + metric.bytes), both_flat (metric_pkt + metric_bytes)
+    units: both_flat
+    # Consider counter invalid (and skip it) if rule has changed without rule_metrics file update
+    discard_changed_rules: true
+
 
 core:
   hostname: # derived from uname() if empty, used to prefix metric names
