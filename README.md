@@ -6,7 +6,7 @@ and sends them to graphite once per interval.
 
 Consists of separate components ("collectors") for processing of:
 
-* /proc/slabinfo for useful-to-watch values, not everything.
+* /proc/slabinfo for useful-to-watch values, not everything (configurable).
 * /proc/vmstat and /proc/meminfo in a consistent way.
 * /proc/stat for irq, softirq, forks.
 * /proc/buddyinfo and /proc/pagetypeinfo (memory fragmentation).
@@ -19,6 +19,10 @@ Consists of separate components ("collectors") for processing of:
 	(use something like `sadc -F -L -S DISK -S XDISK -S POWER 60` to have more
 	stuff logged there) via sadf binary and it's json export (`sadf -j`, supported
 	since sysstat-10.0.something, iirc).
+* iptables rule "hits" packet and byte counters, taken from ip{,6}tables-save,
+	mapped via separate "chain_name rule_no metric_name" file, which should be
+	generated along with firewall rules (I use [this
+	script](https://github.com/mk-fg/trilobite) to do that).
 
 Additional metric collectors can be added via setuptools
 graphite_metrics.collectors entry point.
