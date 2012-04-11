@@ -4,7 +4,7 @@ graphite-metrics: standalone graphite collectors for various stuff not (or poorl
 Core of the project is a simple daemon (harvestd), which collects metric values
 and sends them to graphite once per interval.
 
-Consists of various components for processing of:
+Consists of separate components ("collectors") for processing of:
 
 * /proc/slabinfo for useful-to-watch values, not everything.
 * /proc/vmstat and /proc/meminfo in a consistent way.
@@ -13,7 +13,12 @@ Consists of various components for processing of:
 * /proc/interrupts and /proc/softirqs.
 * Cron log to produce start/finish events and duration for each job into a
 	separate metrics, adapts jobs to metric names with regexes.
-* Per-system-service accounting using systemd cgroups.
+* Per-system-service accounting using
+	[systemd](http://www.freedesktop.org/wiki/Software/systemd) and it's cgroups.
+* [sysstat](http://sebastien.godard.pagesperso-orange.fr/) data from sadc logs
+	(use something like `sadc -F -L -S DISK -S XDISK -S POWER 60` to have more
+	stuff logged there) via sadf binary and it's json export (`sadf -j`, supported
+	since sysstat-10.0.something, iirc).
 
 Additional metric collectors can be added via setuptools
 graphite_metrics.collectors entry point.
