@@ -66,9 +66,8 @@ class IPTables(Collector):
 	def read(self):
 		metric_counts = dict()
 		hashes = defaultdict(lambda: defaultdict(list))
-		rule_metrics = self.rule_metrics
 
-		for v, metrics in rule_metrics.viewitems():
+		for v, metrics in self.rule_metrics.viewitems():
 			if not metrics: continue
 
 			# Used to detect rule changes
