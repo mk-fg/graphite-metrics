@@ -16,7 +16,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.20',
+	version = '12.04.21',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -29,15 +29,21 @@ setup(
 
 	classifiers = [
 		'Development Status :: 4 - Beta',
-		'Environment :: Other Environment',
+		'Environment :: No Input/Output (Daemon)',
 		'Intended Audience :: Developers',
+		'Intended Audience :: System Administrators',
+		'Intended Audience :: Telecommunications Industry',
+		'License :: OSI Approved',
 		'Operating System :: POSIX',
 		'Operating System :: Unix',
 		'Programming Language :: Python',
-		'Topic :: Utilities',
+		'Programming Language :: Python :: 2.7',
+		'Programming Language :: Python :: 2 :: Only',
+		'Topic :: Internet',
 		'Topic :: Internet :: Log Analysis',
-		'Topic :: System :: Networking :: Monitoring'
-		'License :: OSI Approved :: WTFPL' ],
+		'Topic :: System :: Monitoring',
+		'Topic :: System :: Networking :: Monitoring',
+		'Topic :: System :: Operating System Kernels :: Linux' ],
 
 	install_requires=['setuptools', 'xattr', 'iso8601'],
 
