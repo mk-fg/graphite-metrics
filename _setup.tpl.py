@@ -25,7 +25,7 @@ setup(
 
 	description = 'Standalone Graphite metric data collectors for'
 		' various stuff thats not (or poorly) handled by other monitoring daemons',
-	long_description = open(os.path.join(pkg_root, 'README.md')).read(),
+	long_description = open(os.path.join(pkg_root, 'README.pypi')).read(),
 
 	classifiers = [
 		'Development Status :: 4 - Beta',
