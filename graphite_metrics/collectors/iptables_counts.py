@@ -50,13 +50,14 @@ class IPTables(Collector):
 			cache = self._rule_metrics_cache.get(v)
 			if not cache or path != cache.path or mtime != cache.mtime:
 				log.debug('Detected rule_metrics file update: {} (cached: {})'.format(path, cache))
-				table = dict()
+				metrics_table = dict()
 				with open(path, 'rb') as src:
 					for line in it.imap(op.methodcaller('strip'), src):
 						if not line: continue
-						chain, rule, metric = line.split(None, 2)
-						table[chain, int(rule)] = metric
-				cache = self._rule_metrics_cache[v] = self._rule_metrics(table, path, mtime)
+						table, chain, rule, metric = line.split(None, 3)
+						metrics_table[table, chain, int(rule)] = metric
+				cache = self._rule_metrics_cache[v]\
+					= self._rule_metrics(metrics_table, path, mtime)
 			rule_metrics[v] = cache
 		return rule_metrics
 
@@ -81,13 +82,15 @@ class IPTables(Collector):
 			proc = Popen([self.iptables[v], '-c'], stdout=PIPE)
 			chain_counts = defaultdict(int)
 			for line in it.imap(op.methodcaller('strip'), proc.stdout):
-				if line[0] != '[': continue # chain/table spec or comment
+				if line[0] != '[': # chain/table spec or comment
+					if line[0] == '*': table = line[1:]
+					continue
 				counts, append, chain, rule = line.split(None, 3)
 				assert append == '-A'
 
 				chain_counts[chain] += 1 # iptables rules are 1-indexed
 				hash_new[chain].append(rule) # but py lists are 0-indexed
-				try: metric = metrics.table[chain, chain_counts[chain]]
+				try: metric = metrics.table[table, chain, chain_counts[chain]]
 				except KeyError: continue # no point checking rules w/o metrics attached
 
 				# Check for changed rules
