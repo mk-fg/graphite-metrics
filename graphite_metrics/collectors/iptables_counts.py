@@ -99,7 +99,7 @@ class IPTables(Collector):
 						log.warn(
 							( 'Detected changed netfilter rule (chain: {}, pos: {})'
 								' without corresponding rule_metrics file update: {}' )\
-							.format(chain, chain_counts[chain], ' '.join(rule)) )
+							.format(chain, chain_counts[chain], rule) )
 						warnings[chain_counts[chain]] = True
 					if self.conf.discard_changed_rules: continue
 
