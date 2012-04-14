@@ -88,19 +88,23 @@ class IPTables(Collector):
 				counts, append, chain, rule = line.split(None, 3)
 				assert append == '-A'
 
-				chain_counts[chain] += 1 # iptables rules are 1-indexed
+				chain_counts[table, chain] += 1 # iptables rules are 1-indexed
+				chain_count = chain_counts[table, chain]
+				# log.debug('{}, Rule: {}'.format([table, chain, chain_count], rule))
 				hash_new[chain].append(rule) # but py lists are 0-indexed
-				try: metric = metrics.table[table, chain, chain_counts[chain]]
+				try: metric = metrics.table[table, chain, chain_count]
 				except KeyError: continue # no point checking rules w/o metrics attached
+				# log.debug('Metric: {} ({}), rule: {}'.format(
+				# 	metric, [table, chain, chain_count], rule ))
 
 				# Check for changed rules
-				if hash_old and hash_old[chain][chain_counts[chain]-1] != rule:
-					if chain_counts[chain] not in warnings:
+				if hash_old and hash_old[chain][chain_count - 1] != rule:
+					if chain_count not in warnings:
 						log.warn(
 							( 'Detected changed netfilter rule (chain: {}, pos: {})'
 								' without corresponding rule_metrics file update: {}' )\
-							.format(chain, chain_counts[chain], rule) )
-						warnings[chain_counts[chain]] = True
+							.format(chain, chain_count, rule) )
+						warnings[chain_count] = True
 					if self.conf.discard_changed_rules: continue
 
 				counts = map(int, counts.strip('[]').split(':', 1))
