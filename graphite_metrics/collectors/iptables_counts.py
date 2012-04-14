@@ -75,7 +75,7 @@ class IPTables(Collector):
 			try:
 				hash_old, metrics_old, warnings = self._table_hash[v]
 				if metrics is not metrics_old: raise KeyError
-			except KeyError: hash_old = None
+			except KeyError: hash_old, warnings = None, dict()
 			hash_new = hashes[v]
 
 			# iptables-save invocation and output processing loop
@@ -101,7 +101,7 @@ class IPTables(Collector):
 				# Check for changed rules
 				try: rule_chk = hash_old and hash_old[rule_key][chain_count - 1]
 				except (KeyError, IndexError): rule_chk = None
-				if rule_chk != rule:
+				if hash_old and rule_chk != rule:
 					if chain_count not in warnings:
 						log.warn(
 							( 'Detected changed netfilter rule (chain: {}, pos: {})'
