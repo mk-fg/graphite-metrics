@@ -88,17 +88,20 @@ class IPTables(Collector):
 				counts, append, chain, rule = line.split(None, 3)
 				assert append == '-A'
 
-				chain_counts[table, chain] += 1 # iptables rules are 1-indexed
-				chain_count = chain_counts[table, chain]
+				rule_key = table, chain
+				chain_counts[rule_key] += 1 # iptables rules are 1-indexed
+				chain_count = chain_counts[rule_key]
 				# log.debug('{}, Rule: {}'.format([table, chain, chain_count], rule))
-				hash_new[chain].append(rule) # but py lists are 0-indexed
+				hash_new[rule_key].append(rule) # but py lists are 0-indexed
 				try: metric = metrics.table[table, chain, chain_count]
 				except KeyError: continue # no point checking rules w/o metrics attached
 				# log.debug('Metric: {} ({}), rule: {}'.format(
 				# 	metric, [table, chain, chain_count], rule ))
 
 				# Check for changed rules
-				if hash_old and hash_old[chain][chain_count - 1] != rule:
+				try: rule_chk = hash_old and hash_old[rule_key][chain_count - 1]
+				except (KeyError, IndexError): rule_chk = None
+				if rule_chk != rule:
 					if chain_count not in warnings:
 						log.warn(
 							( 'Detected changed netfilter rule (chain: {}, pos: {})'
@@ -116,8 +119,8 @@ class IPTables(Collector):
 
 			# Detect if there are any changes in the table,
 			#  possibly messing the metrics, even if corresponding rules are the same
-			hash_new = dict( (chain, tuple(rules))
-				for chain, rules in hash_new.viewitems() )
+			hash_new = dict( (rule_key, tuple(rules))
+				for rule_key, rules in hash_new.viewitems() )
 			if hash_old\
 					and frozenset(hash_old.viewitems()) != frozenset(hash_new.viewitems()):
 				log.warn('Detected iptables changes without changes to rule_metrics file')
