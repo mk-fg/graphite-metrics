@@ -69,6 +69,11 @@ class Collector(object):
 	def __init__(self, conf):
 		self.conf = conf
 
+	def read(self):
+		raise NotImplementedError( 'Collector.read method should be'
+			' overidden in collector subclasses to return list of Datapoint objects.' )
+		# return [Datapoint(...), Datapoint(...), ...]
+
 
 class Datapoint(namedtuple('Value', 'name type value ts')):
 	_counter_cache = dict()
