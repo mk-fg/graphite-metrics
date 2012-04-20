@@ -24,9 +24,20 @@ Consists of separate components ("collectors") for processing of:
 	be generated along with firewall rules (I use [this
 	script](https://github.com/mk-fg/trilobite) to do that).
 
-Additional metric collectors can be added via setuptools
-graphite_metrics.collectors entry point.
-Look at shipped collectors for API examples.
+Additional metric collectors can be added via setuptools/distribute
+graphite_metrics.collectors [entry
+point](http://packages.python.org/distribute/setuptools.html?highlight=entry%20points#dynamic-discovery-of-services-and-plugins)
+and confgured via the common configuration mechanism.
+
+Same for the datapoint sinks (destinations - it doesn't have to be a single
+carbon host) and the main loop, which can be replaced with the async (simple
+case - threads or [gevent](http://www.gevent.org/)) or buffering loop.
+
+Look at the shipped collectors, loop and sink and their base classes (like
+[graphite_metrics.sinks.Sink](https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py)
+or
+[loops.Basic](https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py))
+for API examples.
 
 
 Running
@@ -34,30 +45,41 @@ Running
 
 	% harvestd -h
 	usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
-	                [-d collector] [-c path] [-n] [--debug]
+	                   [-d collector] [-s sink] [-x sink] [-c path] [-n]
+	                   [--debug-data] [--debug]
 
-	Collect and dispatch various metrics to carbon daemon.
+	Collect and dispatch various metrics to destinations.
 
 	optional arguments:
 	  -h, --help            show this help message and exit
-	  -t host[:port], --carbon host[:port]
+	  -t host[:port], --destination host[:port]
 	                        host[:port] (default port: 2003, can be overidden via
-	                        config file) of carbon tcp line-receiver destination.
+	                        config file) of sink destination endpoint (e.g. carbon
+	                        linereceiver tcp port, by default).
 	  -i seconds, --interval seconds
 	                        Interval between collecting and sending the
 	                        datapoints.
-	  -e collector, --enable collector
+	  -e collector, --collector-enable collector
 	                        Enable only the specified metric collectors, can be
 	                        specified multiple times.
-	  -d collector, --disable collector
+	  -d collector, --collector-disable collector
 	                        Explicitly disable specified metric collectors, can be
-	                        specified multiple times. Overrides --enabled.
+	                        specified multiple times. Overrides --collector-
+	                        enable.
+	  -s sink, --sink-enable sink
+	                        Enable only the specified datapoint sinks, can be
+	                        specified multiple times.
+	  -x sink, --sink-disable sink
+	                        Explicitly disable specified datapoint sinks, can be
+	                        specified multiple times. Overrides --sink-enable.
 	  -c path, --config path
 	                        Configuration files to process. Can be specified more
 	                        than once. Values from the latter ones override values
 	                        in the former. Available CLI options override the
 	                        values in any config.
 	  -n, --dry-run         Do not actually send data.
+	  --debug-data          Log datapoints that are (unless --dry-run is used)
+	                        sent to carbon.
 	  --debug               Verbose operation mode.
 
 See also: [default harvestd.yaml configuration
@@ -68,12 +90,13 @@ overidden using -c option.
 Note that you don't have to specify all the options in each override-config,
 just the ones you need to update.
 
-For example, simple-case configuration file (say, /etc/harvestd.yaml) just to
-specify carbon host and log lines format (dropping timestamp, since it will be
-piped to syslog or systemd-journal anyway) might look like this:
+For example, simple configuration file (say, /etc/harvestd.yaml) just to specify
+carbon host and log lines format (dropping timestamp, since it will be piped to
+syslog or systemd-journal anyway) might look like this:
 
-	carbon:
-	  host: carbon.example.host
+	sinks:
+	  carbon_socket:
+	    host: carbon.example.host
 
 	logging:
 	  formatters:
@@ -92,31 +115,37 @@ Most other tools can (in theory) collect this data, and I've used
 * Doesn't provide some of the most useful stuff - nfs stats, disk utilization
 	time percentage, etc.
 
-* Fails to collect some other stats, producing bullshit like 0'es,
-	clearly-insane or negative values (for io, network, sensors, ...).
+* Fails to collect some other stats, producing strange values like 0'es,
+	unrealistic or negative values (for io, network, sensors, ...).
 
 * General-purpose plugins like "tail" add lot of complexity, making
 	configuration into a mess, while still lacking some basic functionality which
-	10 lines of code can easily provide.
+	10 lines of code (plugin) can easily provide (support is there, but see
+	below).
 
-* Mangles names for metrics, as provided by /proc and referenced in kernel docs
-	and on the internets, no idea what the hell for, "readability"?
+* Plugins change metric names from the ones provided by /proc, referenced in
+	kernel Documentation and on the internets, making collected data unnecessary
+	hard to interpret and raising questions about it's meaning (which is
+	increasingly important for low-level and calculated metrics).
 
-Initially I've tried to implement these as collectd plugins, but it's python
-plugin turned out to be leaking RAM and collectd itself segfaults something like
-once-a-day, even in the latest releases (although probably because of bug in
-some plugin).
+Initially I've tried to address these issues (implement the same collectors)
+with collectd plugins, but it's python plugin system turned out to be leaking
+RAM and collectd itself segfaults something like once-a-day, even in the latest
+releases, although probably because of issues in C plugins.
 
 Plus, collectd data requires post-processing anyway - proper metric namespaces,
-counters, etc.
+counter handling, etc.
 
 Given that the alternative is to just get the data and echo it as "name val
-timestamp" to tcp socket, I just don't see why would I need all the extra
-complexity and fail that collectd provides.
+timestamp" to tcp socket, decided to avoid the extra complexity and problems
+that collectd provides.
 
 Other than collectd, I've experimented with
-[ganglia](http://ganglia.sourceforge.net/), but it's static schema is a no-go
-and most of stuff there doesn't make sense in graphite context.
+[ganglia](http://ganglia.sourceforge.net/),
+[munin](http://munin-monitoring.org/), and some other monitoring
+infrastructures, but found little justification in re-using their aggregation
+and/or collection infrastructure, if not outright limitations (like static data
+schema in ganglia).
 
 Daemon binary is (weirdly) called "harvestd" because "metricsd" name is already
 used to refer to [another graphite-related

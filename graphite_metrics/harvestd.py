@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import itertools as it, operator as op, functools as ft
-from time import time, sleep
 from collections import Mapping
-import os, sys, socket
+import os, sys
 
 
 
@@ -62,86 +61,34 @@ def configure_logging(cfg, custom_level=None):
 	logging.config.dictConfig(cfg)
 
 
-
-class CarbonAggregator(object):
-
-	def __init__(self, host, remote, max_reconnects=None, reconnect_delay=5):
-		self.host, self.remote = host.replace('.', '_'), remote
-		if not max_reconnects or max_reconnects < 0: max_reconnects = None
-		self.max_reconnects = max_reconnects
-		self.reconnect_delay = reconnect_delay
-		self.connect()
-
-	def connect(self):
-		reconnects = self.max_reconnects
-		while True:
-			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			try:
-				self.sock.connect(self.remote)
-				log.debug('Connected to Carbon at {}:{}'.format(*self.remote))
-				return
-			except socket.error, e:
-				if reconnects is not None:
-					reconnects -= 1
-					if reconnects <= 0: raise
-				log.info( 'Failed to connect to'
-					' {0[0]}:{0[1]}: {1}'.format(self.remote, e) )
-				if self.reconnect_delay: sleep(max(0, self.reconnect_delay))
-
-	def reconnect(self):
-		self.close()
-		self.connect()
-
-	def close(self):
-		try: self.sock.close()
-		except: pass
-
-
-	def pack(self, datapoints, ts=None):
-		return ''.join(it.imap(ft.partial(self.pack_datapoint, ts=ts), datapoints))
-
-	def pack_datapoint(self, dp, ts=None):
-		dp = dp.get(ts=ts)
-		if dp is None: return ''
-		name, value, ts = dp
-		return bytes('{} {} {}\n'.format(
-			'{}.{}'.format(self.host, name), value, int(ts) ))
-
-
-	def send(self, ts, *datapoints):
-		reconnects = self.max_reconnects
-		packet = self.pack(datapoints, ts=ts)
-		while True:
-			try:
-				self.sock.sendall(packet)
-				return
-			except socket.error as err:
-				if reconnects is not None:
-					reconnects -= 1
-					if reconnects <= 0: raise
-				log.error('Failed to send data to Carbon server: {}'.format(err))
-				self.reconnect()
-
-
-
 def main():
 	import argparse
 	parser = argparse.ArgumentParser(
-		description='Collect and dispatch various metrics to carbon daemon.')
-	parser.add_argument('-t', '--carbon', metavar='host[:port]',
+		description='Collect and dispatch various metrics to destinations.')
+	parser.add_argument('-t', '--destination', metavar='host[:port]',
 		help='host[:port] (default port: 2003, can be overidden'
-			' via config file) of carbon tcp line-receiver destination.')
+			' via config file) of sink destination endpoint (e.g. carbon'
+			' linereceiver tcp port, by default).')
 	parser.add_argument('-i', '--interval', type=int, metavar='seconds',
 		help='Interval between collecting and sending the datapoints.')
 
-	parser.add_argument('-e', '--enable',
+	parser.add_argument('-e', '--collector-enable',
 		action='append', metavar='collector', default=list(),
 		help='Enable only the specified metric collectors,'
 				' can be specified multiple times.')
-	parser.add_argument('-d', '--disable',
+	parser.add_argument('-d', '--collector-disable',
 		action='append', metavar='collector', default=list(),
 		help='Explicitly disable specified metric collectors,'
-			' can be specified multiple times. Overrides --enabled.')
+			' can be specified multiple times. Overrides --collector-enable.')
+
+	parser.add_argument('-s', '--sink-enable',
+		action='append', metavar='sink', default=list(),
+		help='Enable only the specified datapoint sinks,'
+				' can be specified multiple times.')
+	parser.add_argument('-x', '--sink-disable',
+		action='append', metavar='sink', default=list(),
+		help='Explicitly disable specified datapoint sinks,'
+			' can be specified multiple times. Overrides --sink-enable.')
 
 	parser.add_argument('-c', '--config',
 		action='append', metavar='path', default=list(),
@@ -163,6 +110,13 @@ def main():
 		os.path.splitext(os.path.realpath(__file__))[0] ))
 	for k in optz.config: cfg.update_yaml(k)
 
+	# Deprecated stuff
+	if cfg.get('core') or cfg.get('carbon'):
+		raise ValueError(
+			'Old-style loop/sink configuration options usage detected.'
+			' These are no longer supported or used.'
+			' Please move these into "loop" section of the configuration file.' )
+
 	# Logging
 	import logging
 	global log # will be initialized with default level otherwise
@@ -173,92 +127,84 @@ def main():
 	if not cfg.logging.tracebacks: log.exception = log.error
 
 	# Fill "auto-detected" blanks in the configuration, CLI overrides
-	if not cfg.core.hostname:
-		cfg.core.hostname = os.uname()[1]
-	if optz.carbon: cfg.carbon.host = optz.carbon
-	cfg.carbon.host = cfg.carbon.host.rsplit(':', 1)
-	if len(cfg.carbon.host) == 1:
-		cfg.carbon.host = cfg.carbon.host[0], cfg.carbon.default_port
-	else: cfg.carbon.host[1] = int(cfg.carbon.host[1])
-	if optz.interval: cfg.core.interval = optz.interval
+	if cfg.loop.prefix is None: cfg.loop.prefix = os.uname()[1].replace('.', '_')
+	try:
+		if optz.destination: cfg.sinks._default.host = optz.destination
+		cfg.sinks._default.host = cfg.sinks._default.host.rsplit(':', 1)
+		if len(cfg.sinks._default.host) == 1:
+			cfg.sinks._default.host =\
+				cfg.sinks._default.host[0], cfg.sinks._default.default_port
+		else: cfg.sinks._default.host[1] = int(cfg.sinks._default.host[1])
+	except KeyError: pass
+	if optz.interval: cfg.loop.interval = optz.interval
 	if optz.dry_run: cfg.debug.dry_run = optz.dry_run
 	if optz.debug_data: cfg.debug.dump = optz.debug_data
 
-	# Override "enabled" parameters, based on CLI
-	conf_base = cfg.collectors._default
-	if optz.enable:
-		for name, conf in cfg.collectors.viewitems():
-			if name not in optz.enable: conf['enabled'] = False
-		conf_base['enabled'] = False
-		for name in optz.enable:
-			if name not in cfg.collectors: cfg.collectors[name] = dict()
-			cfg.collectors[name]['enabled'] = True
-	for name in optz.disable:
-		if name not in cfg.collectors: cfg.collectors[name] = dict()
-		cfg.collectors[name]['enabled'] = False
-	if 'debug' not in conf_base: conf_base['debug'] = cfg.debug
+	# Override "enabled" collector/sink parameters, based on CLI
+	ep_conf = dict()
+	for ep, enabled, disabled in\
+			[ ('collectors', optz.collector_enable, optz.collector_disable),
+				('sinks', optz.sink_enable, optz.sink_disable) ]:
+		conf = cfg[ep]
+		conf_base = conf.pop('_default')
+		if enabled:
+			for name, subconf in conf.viewitems():
+				if name not in enabled: subconf['enabled'] = False
+			for name in enabled:
+				if name not in conf: conf[name] = dict()
+				conf[name]['enabled'] = True
+		for name in disabled:
+			if name not in conf: conf[name] = dict()
+			conf[name]['enabled'] = False
+		if 'debug' not in conf_base: conf_base['debug'] = cfg.debug
+		ep_conf[ep] = conf_base, conf, set()
 
-	# Init global cfg for collectors' usage
+	# Init global cfg for collectors/sinks' usage
 	from graphite_metrics import collectors
-	collectors.cfg = cfg
+	from graphite_metrics import sinks
+	collectors.cfg = sinks.cfg = cfg
 
-	# Init collectors
+	# Init pluggable components
 	import pkg_resources
-	collectors = set()
-	for ep in pkg_resources.iter_entry_points('graphite_metrics.collectors'):
-		if ep.name[0] == '_':
-			log.debug('Skipping enty point, prefixed by underscore: {}'.format(ep.name))
-		conf = cfg.collectors.get(ep.name, conf_base)
-		# Fill "_default" collector parameters
-		for k,v in conf_base.viewitems():
-			if k not in conf: conf[k] = v
-		if conf.get('enabled', True):
-			log.debug('Loading collector: {}'.format(ep.name))
-			try: collector = ep.load().collector(conf)
-			except Exception as err:
-				log.exception('Failed to load/init collector ({}): {}'.format(ep.name, err))
-				conf.enabled = False
-			if conf.get('enabled', True): collectors.add(collector)
-			else:
-				log.debug(( 'Collector {} (entry point: {})'
-					' was disabled after init' ).format(collector, ep.name))
-	log.debug('Collectors: {}'.format(collectors))
 
-	# Sanity check
-	if not collectors:
-		log.fatal('No collectors were properly enabled/loaded, bailing out')
-		sys.exit(1)
+	for ep_type in 'collector', 'sink':
+		ep_key = '{}s'.format(ep_type) # a bit of a hack
+		conf_base, conf, objects = ep_conf[ep_key]
+		for ep in pkg_resources\
+				.iter_entry_points('graphite_metrics.{}'.format(ep_key)):
+			if ep.name[0] == '_':
+				log.debug( 'Skipping {} enty point,'
+					' prefixed by underscore: {}'.format(ep_type, ep.name) )
+			subconf = conf.get(ep.name, conf_base)
+			# Fill "_default" collector parameters
+			for k,v in conf_base.viewitems():
+				if k not in subconf: subconf[k] = v
+			if subconf.get('enabled', True):
+				log.debug('Loading {}: {}'.format(ep_type, ep.name))
+				try: obj = getattr(ep.load(), ep_type)(subconf)
+				except Exception as err:
+					log.exception('Failed to load/init collector ({}): {}'.format(ep.name, err))
+					subconf.enabled = False
+				if subconf.get('enabled', True): objects.add(obj)
+				else:
+					log.debug(( '{} {} (entry point: {})'
+						' was disabled after init' ).format(ep_type.title(), obj, ep.name))
+		if not objects:
+			log.fatal('No {}s were properly enabled/loaded, bailing out'.format(ep_type))
+			sys.exit(1)
+		log.debug('{}: {}'.format(ep_key.title(), objects))
 
-	# Carbon connection init
-	if not cfg.debug.dry_run:
-		link = CarbonAggregator(
-			cfg.core.hostname, cfg.carbon.host,
-			max_reconnects=cfg.carbon.max_reconnects,
-			reconnect_delay=cfg.carbon.reconnect_delay )
+	loop = dict( (ep.name, ep) for ep in
+		pkg_resources.iter_entry_points('graphite_metrics.loops') )
+	conf = AttrDict(**cfg.loop)
+	if 'debug' not in conf: conf.debug = cfg.debug
+	collectors, sinks = it.imap( op.itemgetter(2),
+		op.itemgetter('collectors', 'sinks')(ep_conf) )
+	loop = loop[cfg.loop.name].load().loop(conf, collectors, sinks)
 
-	ts = time()
-	while True:
-		data = list()
-		for collector in collectors:
-			log.debug('Polling data from a collector: {}'.format(collector))
-			try: data.extend(collector.read())
-			except Exception as err:
-				log.exception('Failed to poll collector ({}): {}'.format(collector, err))
-		ts_now = time()
-
-		log.debug('Sending {} datapoints'.format(len(data)))
-		if cfg.debug.dump:
-			for dp in data:
-				dp = dp.get(ts=ts_now)
-				if dp is None: continue
-				name, value, ts_dp = dp
-				log.info('Datapoint: {} {} {}'.format(
-					'{}.{}'.format(cfg.core.hostname, name), value, int(ts_dp) ))
-		if not cfg.debug.dry_run: link.send(ts_now, *data)
-
-		while ts < ts_now: ts += cfg.core.interval
-		ts_sleep = max(0, ts - time())
-		log.debug('Sleep: {}s'.format(ts_sleep))
-		sleep(ts_sleep)
+	log.debug(
+		'Starting main loop: {} ({} collectors, {} sinks)'\
+		.format(loop, len(collectors), len(sinks)) )
+	loop.start(collectors, sinks)
 
 if __name__ == '__main__': main()

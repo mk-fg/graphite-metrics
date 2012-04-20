@@ -14,7 +14,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.27',
+	version = '12.04.30',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -54,4 +54,13 @@ setup(
 		'graphite_metrics.collectors': list(
 			'{0} = graphite_metrics.collectors.{0}'.format(name[:-3])
 			for name in it.imap(os.path.basename, iglob(os.path.join(
-				pkg_root, 'graphite_metrics', 'collectors', '[!_]*.py' ))) ) } )
+				pkg_root, 'graphite_metrics', 'collectors', '[!_]*.py' ))) ),
+		'graphite_metrics.loops': list(
+			'{0} = graphite_metrics.loops.{0}'.format(name[:-3])
+			for name in it.imap(os.path.basename, iglob(os.path.join(
+				pkg_root, 'graphite_metrics', 'loops', '[!_]*.py' ))) ),
+		'graphite_metrics.sinks': list(
+			'{0} = graphite_metrics.sinks.{0}'.format(name[:-3])
+			for name in it.imap(os.path.basename, iglob(os.path.join(
+				pkg_root, 'graphite_metrics', 'sinks', '[!_]*.py' ))) )
+	} )

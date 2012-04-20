@@ -27,7 +27,7 @@ class SADF(Collector):
 		if self.conf.force_interval:
 			try:
 				from . import cfg
-				interval = cfg.core.interval
+				interval = cfg.loop.interval
 			except (ImportError, KeyError, AttributeError):
 				log.warn( 'Failed to apply force_interval option'
 					' - unable to access global configuration to get data collection interval' )

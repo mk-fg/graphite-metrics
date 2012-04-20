@@ -3,7 +3,7 @@
 
 
 collectors:
-  _default:
+  _default: # used as a base for all other sections here
     enabled: true
     # debug: # auto-filled from global "debug" section, if not specified
 
@@ -50,21 +50,35 @@ collectors:
     # Consider counter invalid (and skip it) if rule has changed without rule_metrics file update
     discard_changed_rules: true
 
-
-core:
-  hostname: # derived from uname() if empty, used to prefix metric names
-  interval: 60 # seconds
   # self_profiling: # TODO
   #   main_loop: true
   #   collectors: true
 
-carbon:
-  host: localhost # can be specified as "host[:port]"
-  default_port: 2003
-  max_reconnects: # before bailing out with the error
-  reconnect_delay: 5 # seconds
 
-debug:
+sinks:
+  _default: # used as a base for all other sections here
+    # Default host/port for all sinks can be overidden by CLI flags
+    host: localhost # can be specified as "host[:port]"
+    default_port: 2003
+
+    enabled: true
+    # debug: # auto-filled from global "debug" section, if not specified
+
+  carbon_socket:
+    max_reconnects: # before bailing out with the error
+    reconnect_delay: 5 # seconds
+
+
+loop:
+  name: basic # entry point name to use, only one loop can be used
+  interval: 60 # seconds
+
+  # Prefix, used for dispatched metric names
+  # Hostname is used instead of None, so use empty string or false to disable
+  prefix:
+
+
+debug: # can be overidden by CLI flags
   dry_run: false
   dump: false
 

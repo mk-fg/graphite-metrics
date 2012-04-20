@@ -23,53 +23,73 @@ poorly) handled by other monitoring daemons
        metric_name" file, which should be generated along with firewall
        rules (I use [3]this script to do that).
 
-   Additional metric collectors can be added via setuptools
-   graphite_metrics.collectors entry point. Look at shipped collectors
-   for API examples.
+   Additional metric collectors can be added via setuptools/distribute
+   graphite_metrics.collectors [4]entry point and confgured via the
+   common configuration mechanism.
+
+   Same for the datapoint sinks (destinations - it doesn't have to be a
+   single carbon host) and the main loop, which can be replaced with the
+   async (simple case - threads or [5]gevent) or buffering loop.
+
+   Look at the shipped collectors, loop and sink and their base classes
+   (like [6]graphite_metrics.sinks.Sink or [7]loops.Basic) for API
+   examples.
 
 Running
 
 % harvestd -h
 usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
-                [-d collector] [-c path] [-n] [--debug]
+                   [-d collector] [-s sink] [-x sink] [-c path] [-n]
+                   [--debug-data] [--debug]
 
-Collect and dispatch various metrics to carbon daemon.
+Collect and dispatch various metrics to destinations.
 
 optional arguments:
   -h, --help            show this help message and exit
-  -t host[:port], --carbon host[:port]
+  -t host[:port], --destination host[:port]
                         host[:port] (default port: 2003, can be overidden via
-                        config file) of carbon tcp line-receiver destination.
+                        config file) of sink destination endpoint (e.g. carbon
+                        linereceiver tcp port, by default).
   -i seconds, --interval seconds
                         Interval between collecting and sending the
                         datapoints.
-  -e collector, --enable collector
+  -e collector, --collector-enable collector
                         Enable only the specified metric collectors, can be
                         specified multiple times.
-  -d collector, --disable collector
+  -d collector, --collector-disable collector
                         Explicitly disable specified metric collectors, can be
-                        specified multiple times. Overrides --enabled.
+                        specified multiple times. Overrides --collector-
+                        enable.
+  -s sink, --sink-enable sink
+                        Enable only the specified datapoint sinks, can be
+                        specified multiple times.
+  -x sink, --sink-disable sink
+                        Explicitly disable specified datapoint sinks, can be
+                        specified multiple times. Overrides --sink-enable.
   -c path, --config path
                         Configuration files to process. Can be specified more
                         than once. Values from the latter ones override values
                         in the former. Available CLI options override the
                         values in any config.
   -n, --dry-run         Do not actually send data.
+  --debug-data          Log datapoints that are (unless --dry-run is used)
+                        sent to carbon.
   --debug               Verbose operation mode.
 
-   See also: [4]default harvestd.yaml configuration file, which contains
+   See also: [8]default harvestd.yaml configuration file, which contains
    configuration for all loaded collectors and can/should be overidden
    using -c option.
 
    Note that you don't have to specify all the options in each
    override-config, just the ones you need to update.
 
-   For example, simple-case configuration file (say, /etc/harvestd.yaml)
-   just to specify carbon host and log lines format (dropping timestamp,
-   since it will be piped to syslog or systemd-journal anyway) might look
-   like this:
-carbon:
-  host: carbon.example.host
+   For example, simple configuration file (say, /etc/harvestd.yaml) just
+   to specify carbon host and log lines format (dropping timestamp, since
+   it will be piped to syslog or systemd-journal anyway) might look like
+   this:
+sinks:
+  carbon_socket:
+    host: carbon.example.host
 
 logging:
   formatters:
@@ -81,38 +101,45 @@ logging:
 Rationale
 
    Most other tools can (in theory) collect this data, and I've used
-   [5]collectd for most of these, but it:
+   [9]collectd for most of these, but it:
      * Doesn't provide some of the most useful stuff - nfs stats, disk
        utilization time percentage, etc.
-     * Fails to collect some other stats, producing bullshit like 0'es,
-       clearly-insane or negative values (for io, network, sensors, ...).
+     * Fails to collect some other stats, producing strange values like
+       0'es, unrealistic or negative values (for io, network, sensors,
+       ...).
      * General-purpose plugins like "tail" add lot of complexity, making
        configuration into a mess, while still lacking some basic
-       functionality which 10 lines of code can easily provide.
-     * Mangles names for metrics, as provided by /proc and referenced in
-       kernel docs and on the internets, no idea what the hell for,
-       "readability"?
+       functionality which 10 lines of code (plugin) can easily provide
+       (support is there, but see below).
+     * Plugins change metric names from the ones provided by /proc,
+       referenced in kernel Documentation and on the internets, making
+       collected data unnecessary hard to interpret and raising questions
+       about it's meaning (which is increasingly important for low-level
+       and calculated metrics).
 
-   Initially I've tried to implement these as collectd plugins, but it's
-   python plugin turned out to be leaking RAM and collectd itself
-   segfaults something like once-a-day, even in the latest releases
-   (although probably because of bug in some plugin).
+   Initially I've tried to address these issues (implement the same
+   collectors) with collectd plugins, but it's python plugin system
+   turned out to be leaking RAM and collectd itself segfaults something
+   like once-a-day, even in the latest releases, although probably
+   because of issues in C plugins.
 
    Plus, collectd data requires post-processing anyway - proper metric
-   namespaces, counters, etc.
+   namespaces, counter handling, etc.
 
    Given that the alternative is to just get the data and echo it as
-   "name val timestamp" to tcp socket, I just don't see why would I need
-   all the extra complexity and fail that collectd provides.
+   "name val timestamp" to tcp socket, decided to avoid the extra
+   complexity and problems that collectd provides.
 
-   Other than collectd, I've experimented with [6]ganglia, but it's
-   static schema is a no-go and most of stuff there doesn't make sense in
-   graphite context.
+   Other than collectd, I've experimented with [10]ganglia, [11]munin,
+   and some other monitoring infrastructures, but found little
+   justification in re-using their aggregation and/or collection
+   infrastructure, if not outright limitations (like static data schema
+   in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [7]another graphite-related daemon (also,
-   [8]there is "metrics" w/o "d", probably others), and is too generic to
-   be used w/o extra confusion, I think. That, and I seem to lack
+   is already used to refer to [12]another graphite-related daemon (also,
+   [13]there is "metrics" w/o "d", probably others), and is too generic
+   to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).
 
@@ -121,8 +148,13 @@ References
    1. http://www.freedesktop.org/wiki/Software/systemd
    2. http://sebastien.godard.pagesperso-orange.fr/
    3. https://github.com/mk-fg/trilobite
-   4. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
-   5. http://collectd.org/
-   6. http://ganglia.sourceforge.net/
-   7. https://github.com/kpumuk/metricsd
-   8. https://github.com/codahale/metrics
+   4. http://packages.python.org/distribute/setuptools.html?highlight=entry%20points#dynamic-discovery-of-services-and-plugins
+   5. http://www.gevent.org/
+   6. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py
+   7. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py
+   8. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
+   9. http://collectd.org/
+  10. http://ganglia.sourceforge.net/
+  11. http://munin-monitoring.org/
+  12. https://github.com/kpumuk/metricsd
+  13. https://github.com/codahale/metrics

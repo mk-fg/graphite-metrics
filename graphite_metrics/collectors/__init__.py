@@ -87,7 +87,7 @@ class Datapoint(namedtuple('Value', 'name type value ts')):
 		log.debug('Counter cache cleanup: {} buckets'.format(len(cleanup_list)))
 		for k in cleanup_list: del self._counter_cache[k]
 
-	def get(self, ts=None):
+	def get(self, ts=None, prefix=None):
 		ts = self.ts or ts or time()
 		if ts > Datapoint._counter_cache_check_ts:
 			self._counter_cache_cleanup( ts,
@@ -113,4 +113,5 @@ class Datapoint(namedtuple('Value', 'name type value ts')):
 				return None
 		elif self.type == 'gauge': value = self.value
 		else: raise TypeError('Unknown type: {}'.format(self.type))
-		return self.name, value, ts
+		name = self.name if not prefix else '{}.{}'.format(prefix, self.name)
+		return name, value, int(ts)
