@@ -1,10 +1,12 @@
-graphite-metrics: standalone graphite collectors for various stuff not (or
-poorly) handled by other monitoring daemons
+graphite-metrics: metric collectors for various stuff not (or poorly) handled
+by other monitoring daemons
 
    Core of the project is a simple daemon (harvestd), which collects
-   metric values and sends them to graphite once per interval.
+   metric values and sends them to graphite carbon daemon (and/or other
+   configured destinations) once per interval.
 
-   Consists of separate components ("collectors") for processing of:
+   Includes separate data collection components ("collectors") for
+   processing of:
      * /proc/slabinfo for useful-to-watch values, not everything
        (configurable).
      * /proc/vmstat and /proc/meminfo in a consistent way.

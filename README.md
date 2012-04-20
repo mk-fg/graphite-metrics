@@ -1,10 +1,11 @@
-graphite-metrics: standalone graphite collectors for various stuff not (or poorly) handled by other monitoring daemons
+graphite-metrics: metric collectors for various stuff not (or poorly) handled by other monitoring daemons
 --------------------
 
 Core of the project is a simple daemon (harvestd), which collects metric values
-and sends them to graphite once per interval.
+and sends them to graphite carbon daemon (and/or other configured destinations)
+once per interval.
 
-Consists of separate components ("collectors") for processing of:
+Includes separate data collection components ("collectors") for processing of:
 
 * /proc/slabinfo for useful-to-watch values, not everything (configurable).
 * /proc/vmstat and /proc/meminfo in a consistent way.
@@ -148,9 +149,8 @@ and/or collection infrastructure, if not outright limitations (like static data
 schema in ganglia).
 
 Daemon binary is (weirdly) called "harvestd" because "metricsd" name is already
-used to refer to [another graphite-related
-daemon](https://github.com/kpumuk/metricsd) (also, [there is "metrics" w/o
-"d"](https://github.com/codahale/metrics), probably others), and is too generic
-to be used w/o extra confusion, I think.
+used to refer to [another related daemon](https://github.com/kpumuk/metricsd)
+(also, [there's a "metrics" w/o "d"](https://github.com/codahale/metrics),
+probably others), and is too generic to be used w/o extra confusion, I think.
 That, and I seem to lack creativity to come up with a saner name ("reaperd"
 sounds too MassEffect'ish these days).
