@@ -14,7 +14,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.31',
+	version = '12.04.32',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',

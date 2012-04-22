@@ -139,8 +139,8 @@ Rationale
    in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [12]another graphite-related daemon (also,
-   [13]there is "metrics" w/o "d", probably others), and is too generic
+   is already used to refer to [12]another related daemon (also,
+   [13]there's a "metrics" w/o "d", probably others), and is too generic
    to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).

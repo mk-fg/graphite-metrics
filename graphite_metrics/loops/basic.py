@@ -32,7 +32,7 @@ class BasicLoop(Loop):
 			if self.conf.debug.dump:
 				for name, value, ts_dp in data:
 					log.info('Datapoint: {} {} {}'.format(
-						'{}.{}'.format(self.conf.hostname, name), value, ts_dp ))
+						'{}.{}'.format(self.conf.prefix, name), value, ts_dp ))
 			if not self.conf.debug.dry_run:
 				for sink in self.sinks: sink.dispatch(*data)
 
