@@ -59,6 +59,11 @@ def configure_logging(cfg, custom_level=None):
 		if isinstance(entity, Mapping)\
 			and entity.get('level') == 'custom': entity['level'] = custom_level
 	logging.config.dictConfig(cfg)
+	logging.captureWarnings(cfg.warnings)
+	if not cfg.tracebacks:
+		class NoTBLogger(logging.Logger):
+			def exception(self, *argz, **kwz): self.error(*argz, **kwz)
+		logging.setLoggerClass(NoTBLogger)
 
 
 def main():
@@ -119,12 +124,9 @@ def main():
 
 	# Logging
 	import logging
-	global log # will be initialized with default level otherwise
 	configure_logging( cfg.logging,
 		logging.DEBUG if optz.debug else logging.WARNING )
-	logging.captureWarnings(cfg.logging.warnings)
 	log = logging.getLogger(__name__)
-	if not cfg.logging.tracebacks: log.exception = log.error
 
 	# Fill "auto-detected" blanks in the configuration, CLI overrides
 	if cfg.loop.prefix is None: cfg.loop.prefix = os.uname()[1].replace('.', '_')
