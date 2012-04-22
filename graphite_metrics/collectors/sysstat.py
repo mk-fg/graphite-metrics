@@ -179,14 +179,14 @@ class SADF(Collector):
 			sa_proc = Popen(sa_cmd, stdout=PIPE)
 			try: data = loads(sa_proc.stdout.read())
 			except JSONDecodeError as err:
-				log.error(( 'Failed to process sadf (file:'
+				log.exception(( 'Failed to process sadf (file:'
 					' {}, command: {}) output: {}' ).format(sa, sa_cmd, err))
 				data = None
 			if sa_proc.wait():
 				log.error('sadf (command: {}) exited with error'.format(sa_cmd))
 				data = None
 			if not data:
-				log.warn('Skipping processing of sa log: {}'.format(sa))
+				log.warn('Skipping processing of sa file: {}'.format(sa))
 				continue
 
 			# Process and dispatch the datapoints
@@ -208,8 +208,9 @@ class SADF(Collector):
 							interval < self.force_interval[0]
 							or interval > self.force_interval[1] ):
 						log.warn( 'Dropping sample because of interval mismatch'
-							' (interval: {interval}, required: {margins[0]}-{margins[1]}, timestamp: {ts})'\
-								.format(interval=interval, ts=ts, margins=self.force_interval) )
+							' (file: {sa}, interval: {interval},'
+							' required: {margins[0]}-{margins[1]}, timestamp: {ts})'\
+								.format(sa=sa, interval=interval, ts=ts, margins=self.force_interval) )
 						continue
 					ts_val = int(ts)
 					for name, val in metrics:
