@@ -37,6 +37,46 @@ by other monitoring daemons
    (like [6]graphite_metrics.sinks.Sink or [7]loops.Basic) for API
    examples.
 
+Installation
+
+   It's a regular package for Python 2.7 (not 3.X).
+
+   Using [8]pip is the best way:
+% pip install graphite-metrics
+
+   If you don't have it, use:
+% easy_install pip
+% pip install graphite-metrics
+
+   Alternatively ([9]see also):
+% curl https://raw.github.com/pypa/pip/master/contrib/get-pip.py | python
+% pip install graphite-metrics
+
+   Or, if you absolutely must:
+% easy_install graphite-metrics
+
+   But, you really shouldn't do that.
+
+   Current-git version can be installed like this:
+% pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metr
+ics'
+
+   Some data collectors need additional packages to function:
+* cgacct
+    * [dbus-python](https://pypi.python.org/pypi/dbus-python/)
+
+* cron_log
+    * [xattr](http://pypi.python.org/pypi/xattr/)
+    * [iso8601](http://pypi.python.org/pypi/iso8601/)
+
+* sysstat
+    * [xattr](http://pypi.python.org/pypi/xattr/)
+    * (optional) [simplejson](http://pypi.python.org/pypi/simplejson/) - for
+        better performance than stdlib json module
+
+   Also see [10]requirements.txt file or "install_requires" and
+   "extras_require" in [11]setup.py.
+
 Running
 
 % harvestd -h
@@ -78,7 +118,7 @@ optional arguments:
                         sent to carbon.
   --debug               Verbose operation mode.
 
-   See also: [8]default harvestd.yaml configuration file, which contains
+   See also: [12]default harvestd.yaml configuration file, which contains
    configuration for all loaded collectors and can/should be overidden
    using -c option.
 
@@ -103,7 +143,7 @@ logging:
 Rationale
 
    Most other tools can (in theory) collect this data, and I've used
-   [9]collectd for most of these, but it:
+   [13]collectd for most of these, but it:
      * Doesn't provide some of the most useful stuff - nfs stats, disk
        utilization time percentage, etc.
      * Fails to collect some other stats, producing strange values like
@@ -132,15 +172,15 @@ Rationale
    "name val timestamp" to tcp socket, decided to avoid the extra
    complexity and problems that collectd provides.
 
-   Other than collectd, I've experimented with [10]ganglia, [11]munin,
+   Other than collectd, I've experimented with [14]ganglia, [15]munin,
    and some other monitoring infrastructures, but found little
    justification in re-using their aggregation and/or collection
    infrastructure, if not outright limitations (like static data schema
    in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [12]another related daemon (also,
-   [13]there's a "metrics" w/o "d", probably others), and is too generic
+   is already used to refer to [16]another related daemon (also,
+   [17]there's a "metrics" w/o "d", probably others), and is too generic
    to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).
@@ -154,9 +194,13 @@ References
    5. http://www.gevent.org/
    6. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py
    7. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py
-   8. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
-   9. http://collectd.org/
-  10. http://ganglia.sourceforge.net/
-  11. http://munin-monitoring.org/
-  12. https://github.com/kpumuk/metricsd
-  13. https://github.com/codahale/metrics
+   8. http://pip-installer.org/
+   9. http://www.pip-installer.org/en/latest/installing.html
+  10. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
+  11. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
+  12. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
+  13. http://collectd.org/
+  14. http://ganglia.sourceforge.net/
+  15. http://munin-monitoring.org/
+  16. https://github.com/kpumuk/metricsd
+  17. https://github.com/codahale/metrics

@@ -41,6 +41,56 @@ or
 for API examples.
 
 
+Installation
+--------------------
+
+It's a regular package for Python 2.7 (not 3.X).
+
+Using [pip](http://pip-installer.org/) is the best way:
+
+	% pip install graphite-metrics
+
+If you don't have it, use:
+
+	% easy_install pip
+	% pip install graphite-metrics
+
+Alternatively ([see
+also](http://www.pip-installer.org/en/latest/installing.html)):
+
+	% curl https://raw.github.com/pypa/pip/master/contrib/get-pip.py | python
+	% pip install graphite-metrics
+
+Or, if you absolutely must:
+
+	% easy_install graphite-metrics
+
+But, you really shouldn't do that.
+
+Current-git version can be installed like this:
+
+	% pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metrics'
+
+Some data collectors need additional packages to function:
+
+* cgacct
+	* [dbus-python](https://pypi.python.org/pypi/dbus-python/)
+
+* cron_log
+	* [xattr](http://pypi.python.org/pypi/xattr/)
+	* [iso8601](http://pypi.python.org/pypi/iso8601/)
+
+* sysstat
+	* [xattr](http://pypi.python.org/pypi/xattr/)
+	* (optional) [simplejson](http://pypi.python.org/pypi/simplejson/) - for
+		better performance than stdlib json module
+
+Also see
+[requirements.txt](https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt)
+file or "install_requires" and "extras_require" in
+[setup.py](https://github.com/mk-fg/graphite-metrics/blob/master/setup.py).
+
+
 Running
 --------------------
 

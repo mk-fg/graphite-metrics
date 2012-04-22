@@ -14,7 +14,7 @@ pkg_root = os.path.dirname(__file__)
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.35',
+	version = '12.04.37',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -43,7 +43,11 @@ setup(
 		'Topic :: System :: Networking :: Monitoring',
 		'Topic :: System :: Operating System Kernels :: Linux' ],
 
-	install_requires=['setuptools', 'xattr', 'iso8601'],
+	install_requires = ['PyYAML', 'setuptools'],
+	extras_require = {
+		'collectors.cgacct': ['dbus-python'],
+		'collectors.cron_log': ['xattr', 'iso8601'],
+		'collectors.sysstat': ['xattr'] },
 
 	packages = find_packages(),
 	include_package_data = True,
