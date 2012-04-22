@@ -10,8 +10,10 @@ import os, sys, socket, struct
 
 from . import Collector, Datapoint, dev_resolve, sector_bytes, rate_limit
 
-try: from simplejson import loads, dumps
-except ImportError: from json import loads, dumps
+try: from simplejson import loads, dumps, JSONDecodeError
+except ImportError:
+	from json import loads, dumps
+	JSONDecodeError = ValueError
 
 import logging
 log = logging.getLogger(__name__)
@@ -168,15 +170,24 @@ class SADF(Collector):
 					sa_ts_from = datetime(*sa_ts_from.timetuple()[:3]) + timedelta(1) - timedelta(seconds=1)
 
 			# Get data from sadf
-			proc = ['sadf', '-jt']
-			if sa_ts_from: proc.extend(['-s', sa_ts_from.strftime('%H:%M:%S')])
-			if sa_ts_to: proc.extend(['-e', sa_ts_to.strftime('%H:%M:%S')])
-			proc.extend(['--', '-A'])
-			proc.append(sa)
-			log.debug('sadf command: {}'.format(proc))
-			proc = Popen(proc, stdout=PIPE)
-			data = loads(proc.stdout.read())
-			if proc.wait(): raise RuntimeError('sadf exited with error status')
+			sa_cmd = ['sadf', '-jt']
+			if sa_ts_from: sa_cmd.extend(['-s', sa_ts_from.strftime('%H:%M:%S')])
+			if sa_ts_to: sa_cmd.extend(['-e', sa_ts_to.strftime('%H:%M:%S')])
+			sa_cmd.extend(['--', '-A'])
+			sa_cmd.append(sa)
+			log.debug('sadf command: {}'.format(sa_cmd))
+			sa_proc = Popen(sa_cmd, stdout=PIPE)
+			try: data = loads(sa_proc.stdout.read())
+			except JSONDecodeError as err:
+				log.error(( 'Failed to process sadf (file:'
+					' {}, command: {}) output: {}' ).format(sa, sa_cmd, err))
+				data = None
+			if sa_proc.wait():
+				log.error('sadf (command: {}) exited with error'.format(sa_cmd))
+				data = None
+			if not data:
+				log.warn('Skipping processing of sa log: {}'.format(sa))
+				continue
 
 			# Process and dispatch the datapoints
 			sa_ts_max = 0
