@@ -19,7 +19,7 @@ class BasicLoop(Loop):
 		ts = self.time_func()
 		while True:
 			data = list()
-			for collector in self.collectors:
+			for collector in collectors:
 				log.debug('Polling data from a collector: {}'.format(collector))
 				try: data.extend(collector.read())
 				except Exception as err:
@@ -34,7 +34,7 @@ class BasicLoop(Loop):
 					log.info('Datapoint: {} {} {}'.format(
 						'{}.{}'.format(self.conf.prefix, name), value, ts_dp ))
 			if not self.conf.debug.dry_run:
-				for sink in self.sinks: sink.dispatch(*data)
+				for sink in sinks: sink.dispatch(*data)
 
 			while ts < ts_now: ts += self.conf.interval
 			ts_sleep = max(0, ts - self.time_func())

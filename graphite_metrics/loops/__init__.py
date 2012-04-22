@@ -14,11 +14,10 @@ cfg = dict()
 
 class Loop(object):
 
-	def __init__(self, conf, collectors, sinks, time_func=time):
+	def __init__(self, conf, time_func=time):
 		self.conf, self.time_func = conf, time_func
-		self.collectors, self.sinks = collectors, sinks
 
-	def start(self):
+	def start(self, collectors, sinks):
 		raise NotImplementedError( 'Loop.start method should be'
 			' overidden in loop subclasses to start poll/send loop using'
-			' Collector and Sink objects (passed to init).' )
+			' passed Collector and Sink objects.' )

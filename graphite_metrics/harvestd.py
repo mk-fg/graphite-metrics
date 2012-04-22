@@ -160,9 +160,8 @@ def main():
 		ep_conf[ep] = conf_base, conf, set()
 
 	# Init global cfg for collectors/sinks' usage
-	from graphite_metrics import collectors
-	from graphite_metrics import sinks
-	collectors.cfg = sinks.cfg = cfg
+	from graphite_metrics import collectors, sinks, loops
+	collectors.cfg = sinks.cfg = loops.cfg = cfg
 
 	# Init pluggable components
 	import pkg_resources
@@ -198,10 +197,10 @@ def main():
 		pkg_resources.iter_entry_points('graphite_metrics.loops') )
 	conf = AttrDict(**cfg.loop)
 	if 'debug' not in conf: conf.debug = cfg.debug
+	loop = loop[cfg.loop.name].load().loop(conf)
+
 	collectors, sinks = it.imap( op.itemgetter(2),
 		op.itemgetter('collectors', 'sinks')(ep_conf) )
-	loop = loop[cfg.loop.name].load().loop(conf, collectors, sinks)
-
 	log.debug(
 		'Starting main loop: {} ({} collectors, {} sinks)'\
 		.format(loop, len(collectors), len(sinks)) )

@@ -35,6 +35,7 @@ class CarbonSocket(Sink):
 					' {0[0]}:{0[1]}: {1}'.format(self.conf.host, err) )
 				if self.conf.reconnect_delay:
 					sleep(max(0, self.conf.reconnect_delay))
+			else: break
 
 	def close(self):
 		try: self.sock.close()
