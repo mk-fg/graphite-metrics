@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import itertools as it, operator as op, functools as ft
-from time import time
+from time import sleep
 import socket
 
 from . import Sink
