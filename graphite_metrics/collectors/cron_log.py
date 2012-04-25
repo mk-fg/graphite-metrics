@@ -140,9 +140,9 @@ class CronJobs(Collector):
 		super(CronJobs, self).__init__(*argz, **kwz)
 
 		try:
-			log, self.lines, self.aliases =\
+			src, self.lines, self.aliases =\
 				op.attrgetter('source', 'lines', 'aliases')(self.conf)
-			if not (log and self.lines and self.aliases): raise KeyError()
+			if not (src and self.lines and self.aliases): raise KeyError()
 		except KeyError as err:
 			if err.args:
 				log.error('Failed to get required config parameter "{}"'.format(err.args[0]))
@@ -154,7 +154,7 @@ class CronJobs(Collector):
 
 		for k,v in self.lines.viewitems(): self.lines[k] = re.compile(v)
 		for idx,(k,v) in enumerate(self.aliases): self.aliases[idx] = k, re.compile(v)
-		self.log_tailer = file_follow_durable( log,
+		self.log_tailer = file_follow_durable( src,
 			xattr_name=self.conf.xattr_name, read_interval_min=None )
 
 	def read(self, _re_sanitize=re.compile('\s+|-')):
