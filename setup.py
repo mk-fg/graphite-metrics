@@ -21,7 +21,7 @@ for ep_type in 'collectors', 'processors', 'sinks', 'loops':
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.40',
+	version = '12.04.41',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -54,7 +54,8 @@ setup(
 	extras_require = {
 		'collectors.cgacct': ['dbus-python'],
 		'collectors.cron_log': ['xattr', 'iso8601'],
-		'collectors.sysstat': ['xattr'] },
+		'collectors.sysstat': ['xattr'],
+		'sinks.librato_metrics': ['requests'] },
 
 	packages = find_packages(),
 	include_package_data = True,

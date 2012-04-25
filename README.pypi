@@ -34,22 +34,26 @@ by other monitoring daemons
    datapoints) and the main loop, which can be replaced with the async
    (simple case - threads or [5]gevent) or buffering loop.
 
+   Currently supported backends (data destinations, sinks):
+     * [6]graphite carbon daemon (enabled/used by default)
+     * [7]librato metrics
+
    Look at the shipped collectors, processors, sinks and loops and their
-   base classes (like [6]graphite_metrics.sinks.Sink or [7]loops.Basic)
+   base classes (like [8]graphite_metrics.sinks.Sink or [9]loops.Basic)
    for API examples.
 
 Installation
 
    It's a regular package for Python 2.7 (not 3.X).
 
-   Using [8]pip is the best way:
+   Using [10]pip is the best way:
 % pip install graphite-metrics
 
    If you don't have it, use:
 % easy_install pip
 % pip install graphite-metrics
 
-   Alternatively ([9]see also):
+   Alternatively ([11]see also):
 % curl https://raw.github.com/pypa/pip/master/contrib/get-pip.py | python
 % pip install graphite-metrics
 
@@ -62,26 +66,64 @@ Installation
 % pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metr
 ics'
 
-   Some data collectors need additional packages to function:
-     * cgacct
-          + [10]dbus-python
-     * cron_log
-          + [11]xattr
-          + [12]iso8601
-     * sysstat
-          + [13]xattr
-          + (optional) [14]simplejson - for better performance than
-            stdlib json module
+   Some shipped modules require additional packages to function (which
+   can be installed automatically by specifying extras on install,
+   example: pip install 'graphite-metrics[collectors.cgacct]'):
+     * collectors
+          + cgacct
+               o [12]dbus-python
+          + cron_log
+               o [13]xattr
+               o [14]iso8601
+          + sysstat
+               o [15]xattr
+               o (optional) [16]simplejson - for better performance than
+                 stdlib json module
+     * sinks
+          + librato_metrics
+               o [17]requests
+               o (optional) [18]simplejson - for better performance than
+                 stdlib json module
 
-   Also see [15]requirements.txt file or "install_requires" and
-   "extras_require" in [16]setup.py.
+   Also see [19]requirements.txt file or "install_requires" and
+   "extras_require" in [20]setup.py.
 
 Running
 
-% harvestd -h
+   First run should probably look like this:
+% harvestd --debug -s dump -i10
+
+   That will use default configuration with all the collectors enabled,
+   dumping data to stderr (only "dump" data-sink enabled) and using short
+   (5s) interval between collected datapoints, dumpng additional info
+   about what's being done.
+
+   After that, see [21]default harvestd.yaml configuration file, which
+   contains configuration for all loaded collectors and can/should be
+   overidden using -c option.
+
+   Note that you don't have to specify all the options in each
+   override-config, just the ones you need to update.
+
+   For example, simple configuration file (say, /etc/harvestd.yaml) just
+   to specify carbon host and log lines format (dropping timestamp, since
+   it will be piped to syslog or systemd-journal anyway) might look like
+   this:
+sinks:
+  carbon_socket:
+    host: carbon.example.host
+
+logging:
+  formatters:
+    basic:
+      format: '%(levelname)s :: %(name)s: %(message)s'
+
+   And be started like this: harvestd -c /etc/harvestd.yaml
+
+   Full CLI reference:
 usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
-                   [-d collector] [-s sink] [-x sink] [-c path] [-n]
-                   [--debug-data] [--debug]
+                   [-d collector] [-s sink] [-x sink] [-p processor]
+                   [-z processor] [-c path] [-n] [--debug]
 
 Collect and dispatch various metrics to destinations.
 
@@ -107,42 +149,25 @@ optional arguments:
   -x sink, --sink-disable sink
                         Explicitly disable specified datapoint sinks, can be
                         specified multiple times. Overrides --sink-enable.
+  -p processor, --processor-enable processor
+                        Enable only the specified datapoint processors, can be
+                        specified multiple times.
+  -z processor, --processor-disable processor
+                        Explicitly disable specified datapoint processors, can
+                        be specified multiple times. Overrides --processor-
+                        enable.
   -c path, --config path
                         Configuration files to process. Can be specified more
                         than once. Values from the latter ones override values
                         in the former. Available CLI options override the
                         values in any config.
   -n, --dry-run         Do not actually send data.
-  --debug-data          Log datapoints that are (unless --dry-run is used)
-                        sent to carbon.
   --debug               Verbose operation mode.
-
-   See also: [17]default harvestd.yaml configuration file, which contains
-   configuration for all loaded collectors and can/should be overidden
-   using -c option.
-
-   Note that you don't have to specify all the options in each
-   override-config, just the ones you need to update.
-
-   For example, simple configuration file (say, /etc/harvestd.yaml) just
-   to specify carbon host and log lines format (dropping timestamp, since
-   it will be piped to syslog or systemd-journal anyway) might look like
-   this:
-sinks:
-  carbon_socket:
-    host: carbon.example.host
-
-logging:
-  formatters:
-    basic:
-      format: '%(levelname)s :: %(name)s: %(message)s'
-
-   And be started like this: harvestd -c /etc/harvestd.yaml
 
 Rationale
 
    Most other tools can (in theory) collect this data, and I've used
-   [18]collectd for most of these, but it:
+   [22]collectd for most of these, but it:
      * Doesn't provide some of the most useful stuff - nfs stats, disk
        utilization time percentage, etc.
      * Fails to collect some other stats, producing strange values like
@@ -171,15 +196,15 @@ Rationale
    "name val timestamp" to tcp socket, decided to avoid the extra
    complexity and problems that collectd provides.
 
-   Other than collectd, I've experimented with [19]ganglia, [20]munin,
+   Other than collectd, I've experimented with [23]ganglia, [24]munin,
    and some other monitoring infrastructures, but found little
    justification in re-using their aggregation and/or collection
    infrastructure, if not outright limitations (like static data schema
    in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [21]another related daemon (also,
-   [22]there's a "metrics" w/o "d", probably others), and is too generic
+   is already used to refer to [25]another related daemon (also,
+   [26]there's a "metrics" w/o "d", probably others), and is too generic
    to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).
@@ -191,20 +216,24 @@ References
    3. https://github.com/mk-fg/trilobite
    4. http://packages.python.org/distribute/setuptools.html?highlight=entry%20points#dynamic-discovery-of-services-and-plugins
    5. http://www.gevent.org/
-   6. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py
-   7. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py
-   8. http://pip-installer.org/
-   9. http://www.pip-installer.org/en/latest/installing.html
-  10. https://pypi.python.org/pypi/dbus-python/
-  11. http://pypi.python.org/pypi/xattr/
-  12. http://pypi.python.org/pypi/iso8601/
+   6. http://graphite.readthedocs.org/en/latest/carbon-daemons.html
+   7. https://metrics.librato.com/
+   8. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py
+   9. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py
+  10. http://pip-installer.org/
+  11. http://www.pip-installer.org/en/latest/installing.html
+  12. https://pypi.python.org/pypi/dbus-python/
   13. http://pypi.python.org/pypi/xattr/
-  14. http://pypi.python.org/pypi/simplejson/
-  15. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
-  16. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
-  17. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
-  18. http://collectd.org/
-  19. http://ganglia.sourceforge.net/
-  20. http://munin-monitoring.org/
-  21. https://github.com/kpumuk/metricsd
-  22. https://github.com/codahale/metrics
+  14. http://pypi.python.org/pypi/iso8601/
+  15. http://pypi.python.org/pypi/xattr/
+  16. http://pypi.python.org/pypi/simplejson/
+  17. http://pypi.python.org/pypi/requests/
+  18. http://pypi.python.org/pypi/simplejson/
+  19. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
+  20. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
+  21. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
+  22. http://collectd.org/
+  23. http://ganglia.sourceforge.net/
+  24. http://munin-monitoring.org/
+  25. https://github.com/kpumuk/metricsd
+  26. https://github.com/codahale/metrics

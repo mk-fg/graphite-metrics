@@ -2,5 +2,6 @@ PyYAML==3.09
 dbus-python==0.84
 distribute==0.6.24
 iso8601==0.1.4
+requests==0.11.1
 simplejson==2.1.1
 xattr==0.6.2
