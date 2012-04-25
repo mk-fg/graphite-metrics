@@ -50,7 +50,8 @@ class LibratoMetrics(Sink):
 			tuples = ((name, value, None) for name, value, ts_dp in tuples)
 		data['gauges'] = list(it.starmap(self.measurement, tuples))
 		requests.post( data=dumps(data),
-			headers={'content-type': 'application/json'}, **self.conf.http_parameters )
+				headers={'content-type': 'application/json'}, **self.conf.http_parameters )\
+			.raise_for_status()
 
 
 sink = LibratoMetrics
