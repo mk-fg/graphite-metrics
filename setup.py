@@ -11,10 +11,17 @@ sys.dont_write_bytecode = False
 
 pkg_root = os.path.dirname(__file__)
 
+entry_points = dict(console_scripts=['harvestd = graphite_metrics.harvestd:main'])
+for ep_type in 'collectors', 'processors', 'sinks', 'loops':
+	entry_points['graphite_metrics.{}'.format(ep_type)] = list(
+		'{0} = graphite_metrics.{1}.{0}'.format(name[:-3], ep_type)
+		for name in it.imap(os.path.basename, iglob(os.path.join(
+			pkg_root, 'graphite_metrics', ep_type, '[!_]*.py' ))) )
+
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.37',
+	version = '12.04.40',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -53,18 +60,4 @@ setup(
 	include_package_data = True,
 
 	package_data = {'graphite_metrics': ['harvestd.yaml']},
-	entry_points = {
-		'console_scripts': ['harvestd = graphite_metrics.harvestd:main'],
-		'graphite_metrics.collectors': list(
-			'{0} = graphite_metrics.collectors.{0}'.format(name[:-3])
-			for name in it.imap(os.path.basename, iglob(os.path.join(
-				pkg_root, 'graphite_metrics', 'collectors', '[!_]*.py' ))) ),
-		'graphite_metrics.loops': list(
-			'{0} = graphite_metrics.loops.{0}'.format(name[:-3])
-			for name in it.imap(os.path.basename, iglob(os.path.join(
-				pkg_root, 'graphite_metrics', 'loops', '[!_]*.py' ))) ),
-		'graphite_metrics.sinks': list(
-			'{0} = graphite_metrics.sinks.{0}'.format(name[:-3])
-			for name in it.imap(os.path.basename, iglob(os.path.join(
-				pkg_root, 'graphite_metrics', 'sinks', '[!_]*.py' ))) )
-	} )
+	entry_points = entry_points )

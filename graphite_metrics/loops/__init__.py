@@ -17,7 +17,7 @@ class Loop(object):
 	def __init__(self, conf, time_func=time):
 		self.conf, self.time_func = conf, time_func
 
-	def start(self, collectors, sinks):
+	def start(self, collectors, processors, sinks):
 		raise NotImplementedError( 'Loop.start method should be'
-			' overidden in loop subclasses to start poll/send loop using'
-			' passed Collector and Sink objects.' )
+			' overidden in loop subclasses to start poll/process/send loop'
+			' using passed Collector, Processor and Sink objects.' )

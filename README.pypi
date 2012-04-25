@@ -30,12 +30,13 @@ by other monitoring daemons
    common configuration mechanism.
 
    Same for the datapoint sinks (destinations - it doesn't have to be a
-   single carbon host) and the main loop, which can be replaced with the
-   async (simple case - threads or [5]gevent) or buffering loop.
+   single carbon host), datapoint processors (mangle/rename/filter
+   datapoints) and the main loop, which can be replaced with the async
+   (simple case - threads or [5]gevent) or buffering loop.
 
-   Look at the shipped collectors, loop and sink and their base classes
-   (like [6]graphite_metrics.sinks.Sink or [7]loops.Basic) for API
-   examples.
+   Look at the shipped collectors, processors, sinks and loops and their
+   base classes (like [6]graphite_metrics.sinks.Sink or [7]loops.Basic)
+   for API examples.
 
 Installation
 
@@ -62,20 +63,18 @@ Installation
 ics'
 
    Some data collectors need additional packages to function:
-* cgacct
-    * [dbus-python](https://pypi.python.org/pypi/dbus-python/)
+     * cgacct
+          + [10]dbus-python
+     * cron_log
+          + [11]xattr
+          + [12]iso8601
+     * sysstat
+          + [13]xattr
+          + (optional) [14]simplejson - for better performance than
+            stdlib json module
 
-* cron_log
-    * [xattr](http://pypi.python.org/pypi/xattr/)
-    * [iso8601](http://pypi.python.org/pypi/iso8601/)
-
-* sysstat
-    * [xattr](http://pypi.python.org/pypi/xattr/)
-    * (optional) [simplejson](http://pypi.python.org/pypi/simplejson/) - for
-        better performance than stdlib json module
-
-   Also see [10]requirements.txt file or "install_requires" and
-   "extras_require" in [11]setup.py.
+   Also see [15]requirements.txt file or "install_requires" and
+   "extras_require" in [16]setup.py.
 
 Running
 
@@ -118,7 +117,7 @@ optional arguments:
                         sent to carbon.
   --debug               Verbose operation mode.
 
-   See also: [12]default harvestd.yaml configuration file, which contains
+   See also: [17]default harvestd.yaml configuration file, which contains
    configuration for all loaded collectors and can/should be overidden
    using -c option.
 
@@ -143,7 +142,7 @@ logging:
 Rationale
 
    Most other tools can (in theory) collect this data, and I've used
-   [13]collectd for most of these, but it:
+   [18]collectd for most of these, but it:
      * Doesn't provide some of the most useful stuff - nfs stats, disk
        utilization time percentage, etc.
      * Fails to collect some other stats, producing strange values like
@@ -172,15 +171,15 @@ Rationale
    "name val timestamp" to tcp socket, decided to avoid the extra
    complexity and problems that collectd provides.
 
-   Other than collectd, I've experimented with [14]ganglia, [15]munin,
+   Other than collectd, I've experimented with [19]ganglia, [20]munin,
    and some other monitoring infrastructures, but found little
    justification in re-using their aggregation and/or collection
    infrastructure, if not outright limitations (like static data schema
    in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [16]another related daemon (also,
-   [17]there's a "metrics" w/o "d", probably others), and is too generic
+   is already used to refer to [21]another related daemon (also,
+   [22]there's a "metrics" w/o "d", probably others), and is too generic
    to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).
@@ -196,11 +195,16 @@ References
    7. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py
    8. http://pip-installer.org/
    9. http://www.pip-installer.org/en/latest/installing.html
-  10. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
-  11. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
-  12. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
-  13. http://collectd.org/
-  14. http://ganglia.sourceforge.net/
-  15. http://munin-monitoring.org/
-  16. https://github.com/kpumuk/metricsd
-  17. https://github.com/codahale/metrics
+  10. https://pypi.python.org/pypi/dbus-python/
+  11. http://pypi.python.org/pypi/xattr/
+  12. http://pypi.python.org/pypi/iso8601/
+  13. http://pypi.python.org/pypi/xattr/
+  14. http://pypi.python.org/pypi/simplejson/
+  15. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
+  16. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
+  17. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
+  18. http://collectd.org/
+  19. http://ganglia.sourceforge.net/
+  20. http://munin-monitoring.org/
+  21. https://github.com/kpumuk/metricsd
+  22. https://github.com/codahale/metrics

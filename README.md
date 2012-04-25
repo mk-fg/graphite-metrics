@@ -31,10 +31,12 @@ point](http://packages.python.org/distribute/setuptools.html?highlight=entry%20p
 and confgured via the common configuration mechanism.
 
 Same for the datapoint sinks (destinations - it doesn't have to be a single
-carbon host) and the main loop, which can be replaced with the async (simple
-case - threads or [gevent](http://www.gevent.org/)) or buffering loop.
+carbon host), datapoint processors (mangle/rename/filter datapoints) and the
+main loop, which can be replaced with the async (simple case - threads or
+[gevent](http://www.gevent.org/)) or buffering loop.
 
-Look at the shipped collectors, loop and sink and their base classes (like
+Look at the shipped collectors, processors, sinks and loops and their base
+classes (like
 [graphite_metrics.sinks.Sink](https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/sinks/__init__.py)
 or
 [loops.Basic](https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/loops/basic.py))

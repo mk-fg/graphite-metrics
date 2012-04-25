@@ -3,6 +3,8 @@
 
 
 collectors:
+  # Modules that collect the actual datapoints to be sent
+
   _default: # used as a base for all other sections here
     enabled: true
     # debug: # auto-filled from global "debug" section, if not specified
@@ -55,16 +57,32 @@ collectors:
   #   collectors: true
 
 
+processors:
+  # Modules that process the datapoints before they are passed to sinks
+  # Datapoints are passed to processors in the same order as they're specified here,
+  #  with all the entry points without config section afterwards in no particular order
+  # Passed a list of sinks along with the datapoints,
+  #  so can facilitate filtering, by dropping particular sinks from the list
+
+  _default: # used as a base for all other sections here
+    enabled: true
+    # debug: # auto-filled from global "debug" section, if not specified
+
+  hostname_prefix:
+    hostname: # uname(), if unset
+
+
 sinks:
   _default: # used as a base for all other sections here
     # Default host/port for all sinks can be overidden by CLI flags
     host: localhost # can be specified as "host[:port]"
     default_port: 2003
 
-    enabled: true
+    enabled: false # should be explicitly enabled
     # debug: # auto-filled from global "debug" section, if not specified
 
   carbon_socket:
+    enabled: true # the only sink enabled by default
     max_reconnects: # before bailing out with the error
     reconnect_delay: 5 # seconds
 
@@ -73,14 +91,9 @@ loop:
   name: basic # entry point name to use, only one loop can be used
   interval: 60 # seconds
 
-  # Prefix, used for dispatched metric names
-  # Hostname is used instead of None, so use empty string or false to disable
-  prefix:
 
-
-debug: # can be overidden by CLI flags
+debug: # values here can be overidden by special CLI flags
   dry_run: false
-  dump: false
 
 
 logging: # see http://docs.python.org/library/logging.config.html
