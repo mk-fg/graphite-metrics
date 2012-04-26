@@ -2,7 +2,9 @@
 
 import itertools as it, operator as op, functools as ft
 from time import time
+import types
 
+from requests.auth import HTTPBasicAuth
 import requests
 
 try: from simplejson import dumps
@@ -27,8 +29,7 @@ class LibratoMetrics(Sink):
 				from . import cfg
 				self.conf.http_parameters.timeout = cfg.loop.interval / 2
 			except (ImportError, KeyError): self.conf.http_parameters.timeout = 30
-		if isinstance(self.conf.http_parameters.auth, list):
-			self.conf.http_parameters.auth = tuple(self.conf.http_parameters.auth)
+		self.conf.http_parameters.auth = HTTPBasicAuth(*self.conf.http_parameters.auth)
 
 		requests.defaults.danger_mode = True
 		requests.defaults.keep_alive = True
