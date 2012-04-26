@@ -84,9 +84,12 @@ ics'
                o [17]requests
                o (optional) [18]simplejson - for better performance than
                  stdlib json module
+               o (optional) [19]gevent - to enable constant-time (more
+                 scalable) async submissions of large data chunks via
+                 concurrent API requests
 
-   Also see [19]requirements.txt file or "install_requires" and
-   "extras_require" in [20]setup.py.
+   Also see [20]requirements.txt file or "install_requires" and
+   "extras_require" in [21]setup.py.
 
 Running
 
@@ -98,7 +101,7 @@ Running
    (5s) interval between collected datapoints, dumpng additional info
    about what's being done.
 
-   After that, see [21]default harvestd.yaml configuration file, which
+   After that, see [22]default harvestd.yaml configuration file, which
    contains configuration for all loaded collectors and can/should be
    overidden using -c option.
 
@@ -167,7 +170,7 @@ optional arguments:
 Rationale
 
    Most other tools can (in theory) collect this data, and I've used
-   [22]collectd for most of these, but it:
+   [23]collectd for most of these, but it:
      * Doesn't provide some of the most useful stuff - nfs stats, disk
        utilization time percentage, etc.
      * Fails to collect some other stats, producing strange values like
@@ -196,15 +199,15 @@ Rationale
    "name val timestamp" to tcp socket, decided to avoid the extra
    complexity and problems that collectd provides.
 
-   Other than collectd, I've experimented with [23]ganglia, [24]munin,
+   Other than collectd, I've experimented with [24]ganglia, [25]munin,
    and some other monitoring infrastructures, but found little
    justification in re-using their aggregation and/or collection
    infrastructure, if not outright limitations (like static data schema
    in ganglia).
 
    Daemon binary is (weirdly) called "harvestd" because "metricsd" name
-   is already used to refer to [25]another related daemon (also,
-   [26]there's a "metrics" w/o "d", probably others), and is too generic
+   is already used to refer to [26]another related daemon (also,
+   [27]there's a "metrics" w/o "d", probably others), and is too generic
    to be used w/o extra confusion, I think. That, and I seem to lack
    creativity to come up with a saner name ("reaperd" sounds too
    MassEffect'ish these days).
@@ -229,11 +232,12 @@ References
   16. http://pypi.python.org/pypi/simplejson/
   17. http://pypi.python.org/pypi/requests/
   18. http://pypi.python.org/pypi/simplejson/
-  19. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
-  20. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
-  21. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
-  22. http://collectd.org/
-  23. http://ganglia.sourceforge.net/
-  24. http://munin-monitoring.org/
-  25. https://github.com/kpumuk/metricsd
-  26. https://github.com/codahale/metrics
+  19. http://pypi.python.org/pypi/gevent/
+  20. https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt
+  21. https://github.com/mk-fg/graphite-metrics/blob/master/setup.py
+  22. https://github.com/mk-fg/graphite-metrics/blob/master/graphite_metrics/harvestd.yaml
+  23. http://collectd.org/
+  24. http://ganglia.sourceforge.net/
+  25. http://munin-monitoring.org/
+  26. https://github.com/kpumuk/metricsd
+  27. https://github.com/codahale/metrics

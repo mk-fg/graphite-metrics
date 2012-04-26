@@ -104,6 +104,9 @@ installed automatically by specifying extras on install, example: `pip install
 		* [requests](http://pypi.python.org/pypi/requests/)
 		* (optional) [simplejson](http://pypi.python.org/pypi/simplejson/) - for
 			better performance than stdlib json module
+		* (optional) [gevent](http://pypi.python.org/pypi/gevent/) - to enable
+			constant-time (more scalable) async submissions of large data chunks via
+			concurrent API requests
 
 Also see
 [requirements.txt](https://github.com/mk-fg/graphite-metrics/blob/master/requirements.txt)
