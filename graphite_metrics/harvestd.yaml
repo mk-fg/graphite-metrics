@@ -109,6 +109,16 @@ sinks:
     # Saves quite a bit of traffic (roughly 1/3),
     #  but MUST NOT be used with historical data collectors, like sysstat
     unified_measure_time: false
+    # Split measurement submissions into concurrent requests, as suggested by docs
+    # Goal is to minimize overall submission time given the current api limitations
+    # Uses async api in requests module, which requires gevent (gevent.org),
+    #  will be disabled with a warning (or fail, if enabled explicitly), if unavailable
+    chunk_data:
+      # Can be explicitly disabled (enabled: false) to remove gevent-related
+      #  warnings on init, or enabled (=true) to fail if async api is unavailable
+      enabled:
+      max_chunk_size: 500
+      max_concurrent_requests: 10 # 0 or false to remove this limit
 
 
 loop:

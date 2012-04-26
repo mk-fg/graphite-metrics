@@ -21,7 +21,7 @@ for ep_type in 'collectors', 'processors', 'sinks', 'loops':
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.04.44',
+	version = '12.04.45',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
