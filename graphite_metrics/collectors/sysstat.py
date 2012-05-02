@@ -200,6 +200,9 @@ class SADF(Collector):
 				# Read the data
 				for ts, interval, metrics in it.ifilter(
 						None, it.imap(self.process_entry, data['statistics']) ):
+					if ts - 1 > sa_ts_max:
+						# has to be *before* beginning of the next interval
+						sa_ts_max = ts - 1
 					if abs(ts - sa_day_ts) > 24*3600 + interval + 1:
 						log.warn( 'Dropping sample because of timestamp mismatch'
 							' (timestamp: {}, expected date: {})'.format(ts, sa_day_ts) )
@@ -215,8 +218,6 @@ class SADF(Collector):
 					ts_val = int(ts)
 					for name, val in metrics:
 						yield Datapoint('.'.join(name), 'gauge', val, ts_val)
-					ts -= 1 # has to be *before* beginning of the next interval
-					if ts > sa_ts_max: sa_ts_max = ts
 
 			# Update xattr timestamp, if any entries were processed
 			if sa_ts_max:
