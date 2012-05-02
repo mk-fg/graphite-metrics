@@ -166,8 +166,8 @@ class SADF(Collector):
 						' (day: {}, xattr: {})'.format(sa_day, sa_ts_from) )
 					sa_ts_from = None
 				if sa_ts_from and sa_ts_from.date() != sa_day.date():
-					# Last datapoint should go on the next day, but passing "-s 00:00:XX" will be wrong
-					sa_ts_from = datetime(*sa_ts_from.timetuple()[:3]) + timedelta(1) - timedelta(seconds=1)
+					log.debug('File xattr timestamp points to the next day, skipping file')
+					continue
 
 			# Get data from sadf
 			sa_cmd = ['sadf', '-jt']
