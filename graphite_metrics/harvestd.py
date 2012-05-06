@@ -228,7 +228,7 @@ def main():
 				log.debug('Loading {}: {}'.format(ep_type, ep_name))
 				try: obj = getattr(ep_module, ep_type)(subconf)
 				except Exception as err:
-					log.exception('Failed to load/init collector ({}): {}'.format(ep_name, err))
+					log.exception('Failed to load/init {} ({}): {}'.format(ep_type, ep_name, err))
 					subconf.enabled = False
 					obj = None
 				if subconf.get('enabled', True): objects[ep_name] = obj
