@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import itertools as it, operator as op, functools as ft
-from time import time, sleep
 
 from . import Loop
 
@@ -14,6 +13,7 @@ class BasicLoop(Loop):
 	'Simple synchronous "while True: fetch && process && send" loop.'
 
 	def start(self, collectors, processors, sinks):
+		from time import time, sleep
 
 		ts = self.time_func()
 		while True:
