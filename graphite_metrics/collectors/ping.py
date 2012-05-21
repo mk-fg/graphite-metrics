@@ -26,7 +26,7 @@ class PingerInterface(Collector):
 
 	def spawn_pinger(self):
 		cmd = (
-			[os.path.join(os.path.dirname(__file__), '_ping.py')]
+			['python', os.path.join(os.path.dirname(__file__), '_ping.py')]
 				+ map(bytes, [ self.conf.interval,
 					self.conf.resolve.no_reply or 0, self.conf.resolve.time or 0,
 					self.conf.ewma_factor, os.getpid() ])
