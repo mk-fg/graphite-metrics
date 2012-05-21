@@ -60,14 +60,18 @@ class AttrDict(dict):
 		if if_exists and not os.path.exists(path): return cls()
 		return cls(yaml.load(open(path), OrderedDictYAMLLoader))
 
-	def flatten(self, path=tuple()):
+	@staticmethod
+	def flatten_dict(data, path=tuple()):
 		dst = list()
-		for k,v in self.iteritems():
+		for k,v in data.iteritems():
 			k = path + (k,)
 			if isinstance(v, Mapping):
 				for v in v.flatten(k): dst.append(v)
 			else: dst.append((k, v))
 		return dst
+
+	def flatten(self, path=tuple()):
+		return self.flatten_dict(self, path=path)
 
 	def update_flat(self, val):
 		if isinstance(val, AttrDict): val = val.flatten()
@@ -80,8 +84,22 @@ class AttrDict(dict):
 			if v is not None or not isinstance(
 				dst.get(k[-1]), Mapping ): dst[k[-1]] = v
 
+	def update_dict(self, data):
+		self.update_flat(self.flatten_dict(data))
+
 	def update_yaml(self, path):
 		self.update_flat(self.from_yaml(path))
+
+	def clone(self):
+		clone = AttrDict()
+		clone.update_dict(self)
+		return clone
+
+	def rebase(self, base):
+		base = base.clone()
+		base.update_dict(self)
+		self.clear()
+		self.update_dict(base)
 
 
 def configure_logging(cfg, custom_level=None):
@@ -189,17 +207,8 @@ def main():
 				('sinks', optz.sink_enable, optz.sink_disable) ]:
 		conf = cfg[ep]
 		conf_base = conf.pop('_default')
-		if enabled:
-			for name, subconf in conf.viewitems():
-				if name not in enabled: subconf['enabled'] = False
-			for name in enabled:
-				if name not in conf: conf[name] = dict()
-				conf[name]['enabled'] = True
-		for name in disabled:
-			if name not in conf: conf[name] = dict()
-			conf[name]['enabled'] = False
 		if 'debug' not in conf_base: conf_base['debug'] = cfg.debug
-		ep_conf[ep] = conf_base, conf, OrderedDict()
+		ep_conf[ep] = conf_base, conf, OrderedDict(), enabled, disabled
 
 	# Init global cfg for collectors/sinks' usage
 	from graphite_metrics import collectors, sinks, loops
@@ -210,7 +219,7 @@ def main():
 
 	for ep_type in 'collector', 'processor', 'sink':
 		ep_key = '{}s'.format(ep_type) # a bit of a hack
-		conf_base, conf, objects = ep_conf[ep_key]
+		conf_base, conf, objects, enabled, disabled = ep_conf[ep_key]
 		ep_dict = dict( (ep.name, ep.load()) for ep in
 			pkg_resources.iter_entry_points('graphite_metrics.{}'.format(ep_key)) )
 		eps = OrderedDict( (name, (ep_dict.pop(name), subconf))
@@ -221,9 +230,11 @@ def main():
 			if ep_name[0] == '_':
 				log.debug( 'Skipping {} enty point,'
 					' prefixed by underscore: {}'.format(ep_type, ep_name) )
-			# Fill "_default" collector parameters
-			for k,v in conf_base.viewitems():
-				if k not in subconf: subconf[k] = v
+			subconf.rebase(conf_base) # fill in "_default" collector parameters
+			if enabled:
+				if ep_name in enabled: subconf['enabled'] = True
+				else: subconf['enabled'] = False
+			if disabled and ep_name in disabled: subconf['enabled'] = False
 			if subconf.get('enabled', True):
 				log.debug('Loading {}: {}'.format(ep_type, ep_name))
 				try: obj = getattr(ep_module, ep_type)(subconf)
