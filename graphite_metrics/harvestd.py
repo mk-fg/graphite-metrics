@@ -220,7 +220,7 @@ def main():
 	for ep_type in 'collector', 'processor', 'sink':
 		ep_key = '{}s'.format(ep_type) # a bit of a hack
 		conf_base, conf, objects, enabled, disabled = ep_conf[ep_key]
-		ep_dict = dict( (ep.name, ep.load()) for ep in
+		ep_dict = dict( (ep.name, ep) for ep in
 			pkg_resources.iter_entry_points('graphite_metrics.{}'.format(ep_key)) )
 		eps = OrderedDict( (name, (ep_dict.pop(name), subconf))
 			for name, subconf in conf.viewitems() if name in ep_dict )
@@ -237,7 +237,7 @@ def main():
 			if disabled and ep_name in disabled: subconf['enabled'] = False
 			if subconf.get('enabled', True):
 				log.debug('Loading {}: {}'.format(ep_type, ep_name))
-				try: obj = getattr(ep_module, ep_type)(subconf)
+				try: obj = getattr(ep_module.load(), ep_type)(subconf)
 				except Exception as err:
 					log.exception('Failed to load/init {} ({}): {}'.format(ep_type, ep_name, err))
 					subconf.enabled = False
