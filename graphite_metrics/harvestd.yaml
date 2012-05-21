@@ -9,6 +9,20 @@ collectors:
     enabled: true
     # debug: # auto-filled from global "debug" section, if not specified
 
+  ping:
+    interval: 5 # seconds between sending-out pings
+    ewma_factor: 0.3 # ewma factor for rtt values
+    resolve:
+      no_reply: 30 # re-resolve hostnames after 30 seconds w/o reply
+      time: 600 # re-resolve hostnames after fixed 600s intervals
+    hosts: # explicitly split into ipv4/ipv6 to control how hostnames are resolved
+      ipv4:
+        # google_com: google.com
+        # google_dns: 8.8.8.8
+      ipv6:
+        # ipv6_google_com: ipv6.google.com
+        # ipv6_tunnelbroker_net: ipv6.tunnelbroker.net
+
   cron_log:
     source: # must be filled with path to a log file
     aliases: # either [alias, regexp] or ["_" + regexp_group, regexp], see "_script" example below
