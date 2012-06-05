@@ -22,7 +22,7 @@ class IPTables(Collector):
 
 		if not self.conf.rule_metrics_path.ipv4\
 				and not self.conf.rule_metrics_path.ipv6:
-			log.warn('No paths for rule_metrics_path specified')
+			log.info('No paths for rule_metrics_path specified, disabling collector')
 			self.conf.enabled = False
 
 		assert self.conf.units in ['pkt', 'bytes', 'both', 'both_flat']

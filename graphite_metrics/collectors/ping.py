@@ -23,7 +23,7 @@ class PingerInterface(Collector):
 			( ('v6:{}'.format(spec), name)
 				for name, spec in (self.conf.hosts.ipv6 or dict()).viewitems() ) ))
 		if not self.hosts:
-			log.debug('No valid hosts to ping specified, disabling collector')
+			log.info('No valid hosts to ping specified, disabling collector')
 			self.conf.enabled = False
 		else: self.spawn_pinger()
 

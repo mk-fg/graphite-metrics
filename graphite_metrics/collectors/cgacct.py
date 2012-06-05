@@ -37,6 +37,7 @@ class CGAcct(Collector):
 			self.rc_collectors.append(rc_collector)
 
 		if not self.rc_collectors: # no point doing anything else
+			log.info('No cgroup rcs to poll (rc_collectors), disabling collector')
 			self.conf.enabled = False
 			return
 
