@@ -69,10 +69,11 @@ collectors:
     # In my case, these bindings are generated from higher-level configuration
     #  by trilobite script (https://github.com/mk-fg/trilobite).
     rule_metrics_path:
-      # Files with "table_name chain_name rule_no metric_name" lines for iptables/ip6tables
-      # Example line: "filter FORWARD 30 network.services.tor.out"
-      ipv4: /var/lib/iptables/metrics.list
-      ipv6: /var/lib/ip6tables/metrics.list
+      # Paths to files with "table_name chain_name rule_no metric_name"
+      #  lines for iptables/ip6tables.
+      # Example line in such files: "filter FORWARD 30 network.services.tor.out"
+      ipv4: # example: /var/lib/iptables/metrics.list
+      ipv6: # example: /var/lib/ip6tables/metrics.list
     # One of: pkt, bytes, both (metric.pkt + metric.bytes), both_flat (metric_pkt + metric_bytes)
     units: both_flat
     # Consider counter invalid (and skip it) if rule has changed without rule_metrics file update
