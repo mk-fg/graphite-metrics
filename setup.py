@@ -20,7 +20,7 @@ entry_points.update(
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.06.1',
+	version = '12.06.2',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -49,7 +49,8 @@ setup(
 		'Topic :: System :: Networking :: Monitoring',
 		'Topic :: System :: Operating System Kernels :: Linux' ],
 
-	install_requires = ['PyYAML', 'setuptools'],
+	install_requires = [ 'PyYAML',
+		'layered-yaml-attrdict-config', 'setuptools' ],
 	extras_require = {
 		'collectors.cgacct': ['dbus-python'],
 		'collectors.cron_log': ['xattr', 'iso8601'],
