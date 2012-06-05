@@ -5,7 +5,6 @@ import itertools as it, operator as op, functools as ft
 from lya import AttrDict, configure_logging
 from collections import OrderedDict
 import os, sys
-import yaml, yaml.constructor
 
 
 def main():

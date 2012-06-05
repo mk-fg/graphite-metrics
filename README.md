@@ -85,7 +85,6 @@ Current-git version can be installed like this:
 Basic requirements are (pip or easy_install should handle these for you):
 
 * [setuptools / distribute](https://pypi.python.org/pypi/distribute/) (for entry points)
-* [PyYAML](https://pypi.python.org/pypi/PyYAML/)
 * [layered-yaml-attrdict-config](https://pypi.python.org/pypi/layered-yaml-attrdict-config/)
 
 Some shipped modules require additional packages to function (which can be
