@@ -80,10 +80,10 @@ ics'
           + cgacct
                o [14]dbus-python
           + cron_log
-               o [15]xattr
+               o [15]xattr (unless --xattr-emulation is used)
                o [16]iso8601
           + sysstat
-               o [17]xattr
+               o [17]xattr (unless --xattr-emulation is used)
                o (optional) [18]simplejson - for better performance than
                  stdlib json module
      * sinks

@@ -52,6 +52,10 @@ def main():
 			' Values from the latter ones override values in the former.'
 			' Available CLI options override the values in any config.')
 
+	parser.add_argument('-a', '--xattr-emulation', metavar='db-path',
+		help='Emulate filesystem extended attributes (used in'
+			' some collectors like sysstat or cron_log), storing per-path'
+			' data in a simple shelve db.')
 	parser.add_argument('-n', '--dry-run',
 		action='store_true', help='Do not actually send data.')
 	parser.add_argument('--debug',
@@ -62,13 +66,6 @@ def main():
 	cfg = AttrDict.from_yaml('{}.yaml'.format(
 		os.path.splitext(os.path.realpath(__file__))[0] ))
 	for k in optz.config: cfg.update_yaml(k)
-
-	# Deprecated stuff
-	if cfg.get('core') or cfg.get('carbon'):
-		raise ValueError(
-			'Old-style loop/sink configuration options usage detected.'
-			' These are no longer supported or used.'
-			' Please move these into "loop" section of the configuration file.' )
 
 	# Logging
 	import logging
@@ -91,6 +88,22 @@ def main():
 	except KeyError: pass
 	if optz.interval: cfg.loop.interval = optz.interval
 	if optz.dry_run: cfg.debug.dry_run = optz.dry_run
+	if optz.xattr_emulation: cfg.core.xattr_emulation = optz.xattr_emulation
+
+	# Fake "xattr" module, if requested
+	if cfg.core.xattr_emulation:
+		import shelve
+		xattr_db = shelve.open(cfg.core.xattr_emulation, 'c')
+		class xattr_path(object):
+			def __init__(self, base):
+				assert isinstance(base, str)
+				self.base = base
+			def key(self, k): return '{}\0{}'.format(self.base, k)
+			def __setitem__(self, k, v): xattr_db[self.key(k)] = v
+			def __getitem__(self, k): return xattr_db[self.key(k)]
+			def __del__(self): xattr_db.sync()
+		class xattr_module(object): xattr = xattr_path
+		sys.modules['xattr'] = xattr_module
 
 	# Override "enabled" collector/sink parameters, based on CLI
 	ep_conf = dict()

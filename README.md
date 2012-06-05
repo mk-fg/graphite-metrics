@@ -97,11 +97,11 @@ installed automatically by specifying extras on install, example: `pip install
 		* [dbus-python](https://pypi.python.org/pypi/dbus-python/)
 
 	* cron_log
-		* [xattr](http://pypi.python.org/pypi/xattr/)
+		* [xattr](http://pypi.python.org/pypi/xattr/) (unless --xattr-emulation is used)
 		* [iso8601](http://pypi.python.org/pypi/iso8601/)
 
 	* sysstat
-		* [xattr](http://pypi.python.org/pypi/xattr/)
+		* [xattr](http://pypi.python.org/pypi/xattr/) (unless --xattr-emulation is used)
 		* (optional) [simplejson](http://pypi.python.org/pypi/simplejson/) - for
 			better performance than stdlib json module
 

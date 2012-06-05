@@ -140,6 +140,13 @@ loop:
   interval: 60 # seconds
 
 
+core:
+  # Emulate filesystem extended attributes (used in some collectors
+  #  like sysstat or cron_log), storing per-path data in a simple shelve db.
+  # Done by faking "xattr" module. Attached data will be lost on path changes.
+  # Specify a path to db file (will be created) to use it.
+  xattr_emulation:
+
 debug: # values here can be overidden by special CLI flags
   dry_run: false
 
