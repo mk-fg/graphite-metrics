@@ -66,9 +66,11 @@ Installation
 % pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metr
 ics'
 
+  Requirements
+
    Basic requirements are (pip or easy_install should handle these for
    you):
-     * [12]setuptools (for entry points)
+     * [12]setuptools / distribute (for entry points)
      * [13]PyYAML
      * [14]layered-yaml-attrdict-config
 

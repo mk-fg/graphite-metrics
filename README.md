@@ -80,9 +80,11 @@ Current-git version can be installed like this:
 
 	% pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metrics'
 
+### Requirements
+
 Basic requirements are (pip or easy_install should handle these for you):
 
-* [setuptools](https://pypi.python.org/pypi/distribute/) (for entry points)
+* [setuptools / distribute](https://pypi.python.org/pypi/distribute/) (for entry points)
 * [PyYAML](https://pypi.python.org/pypi/PyYAML/)
 * [layered-yaml-attrdict-config](https://pypi.python.org/pypi/layered-yaml-attrdict-config/)
 
