@@ -158,8 +158,8 @@ And be started like this: `harvestd -c /etc/harvestd.yaml`
 Full CLI reference:
 
 	usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
-	                   [-d collector] [-s sink] [-x sink] [-p processor]
-	                   [-z processor] [-c path] [-n] [--debug]
+	                [-d collector] [-s sink] [-x sink] [-p processor]
+	                [-z processor] [-c path] [-a db-path] [-n] [--debug]
 
 	Collect and dispatch various metrics to destinations.
 
@@ -197,6 +197,10 @@ Full CLI reference:
 	                        than once. Values from the latter ones override values
 	                        in the former. Available CLI options override the
 	                        values in any config.
+	  -a db-path, --xattr-emulation db-path
+	                        Emulate filesystem extended attributes (used in some
+	                        collectors like sysstat or cron_log), storing per-path
+	                        data in a simple shelve db.
 	  -n, --dry-run         Do not actually send data.
 	  --debug               Verbose operation mode.
 

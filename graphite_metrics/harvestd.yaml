@@ -10,6 +10,7 @@ collectors:
     # debug: # auto-filled from global "debug" section, if not specified
 
   ping:
+    # Reports average (ewma) rtt of icmp ping to each specified host.
     interval: 5 # seconds between sending-out pings
     ewma_factor: 0.3 # ewma factor for rtt values
     resolve:
@@ -24,6 +25,9 @@ collectors:
         # ipv6_tunnelbroker_net: ipv6.tunnelbroker.net
 
   cron_log:
+    # Reports start/stop, run time and errors for cron jobs from a logfile.
+    # I use simple wrappers for cron-jobs to produce these logs (among other things):
+    #  https://github.com/mk-fg/fgtk#task https://github.com/mk-fg/fgtk/tree/master/task
     source: # must be filled with path to a log file
     aliases: # either [alias, regexp] or ["_" + regexp_group, regexp], see "_script" example below
       # - ['logrotate', '(^|\b)logrotate\b']
@@ -38,15 +42,19 @@ collectors:
     xattr_name: user.collectd.logtail.pos # used to mark "last position" in sa logs
 
   slabinfo:
+    # Reports RAM usage by kernel, allocated via slab subsystem.
     include_prefixes: # takes priority over exclude_prefixes
     exclude_prefixes: ['kmalloc-', 'kmem_cache', 'dma-kmalloc-']
     pass_zeroes: False # to skip creating a lot metrics for always-0 (for particular hosts) slab counts
 
   cgacct:
+    # Accounting of cpu/mem/io for systemd-created per-service cgroups.
     cg_root: /sys/fs/cgroup
     resource_controllers: ['cpuacct', 'memory', 'blkio'] # mapped to methods in cgacct.py
 
   sysstat:
+    # Processing of sysstat logs - cpu, io, network, temperatures, etc.
+    # See collectors/sysstat.py for full list of parameters.
     force_interval: true # skip intervals of different length than core.interval
     force_interval_fuzz: 10 # +/- % to consider acceptable interval fuzz
     sa_path: /var/log/sa
@@ -57,14 +65,31 @@ collectors:
     xattr_name: user.sa_carbon.pos # used to mark "last position" in sa logs
 
   iptables_counts:
+    # Packet/byte counters from iptables/ip6tables.
+    # In my case, these bindings are generated from higher-level configuration
+    #  by trilobite script (https://github.com/mk-fg/trilobite).
     rule_metrics_path:
-      # Files with "chain_name rule_no metric_name" lines for iptables/ip6tables
+      # Files with "table_name chain_name rule_no metric_name" lines for iptables/ip6tables
+      # Example line: "filter FORWARD 30 network.services.tor.out"
       ipv4: /var/lib/iptables/metrics.list
       ipv6: /var/lib/ip6tables/metrics.list
     # One of: pkt, bytes, both (metric.pkt + metric.bytes), both_flat (metric_pkt + metric_bytes)
     units: both_flat
     # Consider counter invalid (and skip it) if rule has changed without rule_metrics file update
     discard_changed_rules: true
+
+  irq:
+    # Interrupt counters (/proc/interrupts, /proc/softirqs) processing.
+    # No configuration.
+  memstats:
+    # System memory usage statistics (/proc/vmstat, /proc/meminfo).
+    # No configuration.
+  memfrag:
+    # Memory fragmentation statistics (/proc/buddyinfo, /proc/pagetypeinfo).
+    # No configuration.
+  stats:
+    # General system statistics (/proc/stats) - irq.total.{hard,soft}, processes.forks, etc.
+    # No configuration.
 
   # self_profiling: # TODO
   #   main_loop: true

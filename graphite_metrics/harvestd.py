@@ -128,7 +128,8 @@ def main():
 		conf_base, conf, objects, enabled, disabled = ep_conf[ep_key]
 		ep_dict = dict( (ep.name, ep) for ep in
 			pkg_resources.iter_entry_points('graphite_metrics.{}'.format(ep_key)) )
-		eps = OrderedDict( (name, (ep_dict.pop(name), subconf))
+		eps = OrderedDict(
+			(name, (ep_dict.pop(name), subconf or AttrDict()))
 			for name, subconf in conf.viewitems() if name in ep_dict )
 		eps.update( (name, (module, conf_base))
 			for name, module in ep_dict.viewitems() )

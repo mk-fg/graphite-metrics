@@ -20,7 +20,7 @@ entry_points.update(
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.06.5',
+	version = '12.06.6',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
