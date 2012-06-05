@@ -22,7 +22,10 @@ class PingerInterface(Collector):
 				for name, spec in (self.conf.hosts.ipv4 or dict()).viewitems() ),
 			( ('v6:{}'.format(spec), name)
 				for name, spec in (self.conf.hosts.ipv6 or dict()).viewitems() ) ))
-		self.spawn_pinger()
+		if not self.hosts:
+			log.debug('No valid hosts to ping specified, disabling collector')
+			self.conf.enabled = False
+		else: self.spawn_pinger()
 
 	def spawn_pinger(self):
 		cmd = (
