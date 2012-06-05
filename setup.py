@@ -6,9 +6,6 @@ import os, sys
 
 from setuptools import setup, find_packages
 
-# Dirty workaround for "error: byte-compiling is disabled." message
-sys.dont_write_bytecode = False
-
 pkg_root = os.path.dirname(__file__)
 
 entry_points = dict(console_scripts=['harvestd = graphite_metrics.harvestd:main'])
