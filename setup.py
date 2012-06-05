@@ -9,16 +9,18 @@ from setuptools import setup, find_packages
 pkg_root = os.path.dirname(__file__)
 
 entry_points = dict(console_scripts=['harvestd = graphite_metrics.harvestd:main'])
-for ep_type in 'collectors', 'processors', 'sinks', 'loops':
-	entry_points['graphite_metrics.{}'.format(ep_type)] = list(
-		'{0} = graphite_metrics.{1}.{0}'.format(name[:-3], ep_type)
-		for name in it.imap(os.path.basename, iglob(os.path.join(
-			pkg_root, 'graphite_metrics', ep_type, '[!_]*.py' ))) )
+entry_points.update(
+	('graphite_metrics.{}'.format(ep_type), list(
+		'{0} = graphite_metrics.{1}.{0}'\
+			.format(os.path.basename(fn)[:-3], ep_type)
+		for fn in iglob(os.path.join(
+			pkg_root, 'graphite_metrics', ep_type, '[!_]*.py' )) ))
+	for ep_type in ['collectors', 'processors', 'sinks', 'loops'] )
 
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.05.8',
+	version = '12.06.1',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
