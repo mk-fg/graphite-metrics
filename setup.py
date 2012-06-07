@@ -17,10 +17,14 @@ entry_points.update(
 			pkg_root, 'graphite_metrics', ep_type, '[!_]*.py' )) ))
 	for ep_type in ['collectors', 'processors', 'sinks', 'loops'] )
 
+# Error-handling here is to allow package to be built w/o README included
+try: readme = open(os.path.join(pkg_root, 'README.pypi')).read()
+except IOError: readme = ''
+
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.06.9',
+	version = '12.06.10',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -29,7 +33,7 @@ setup(
 
 	description = 'Standalone Graphite metric data collectors for'
 		' various stuff thats not (or poorly) handled by other monitoring daemons',
-	long_description = open(os.path.join(pkg_root, 'README.pypi')).read(),
+	long_description = readme,
 
 	classifiers = [
 		'Development Status :: 4 - Beta',
