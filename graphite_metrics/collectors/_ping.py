@@ -51,7 +51,7 @@ class Pinger(object):
 
 	def start( self, host_specs, interval,
 			resolve_no_reply, resolve_fixed, ewma_factor, ping_pid,
-			log=None ):
+			log=None, warn_tries=5 ):
 		ts = time()
 		seq_gen = it.chain.from_iterable(it.imap(xrange, it.repeat(2**15)))
 		resolve_fixed_deadline = ts + resolve_fixed
@@ -63,9 +63,24 @@ class Pinger(object):
 			while True:
 				ping_id = random.randint(0, 0xffff)
 				if ping_id not in hosts: break
-			hosts[host] = host_ids[ping_id] = dict(
-				ping_id=ping_id, ip=self.resolve(host),
-				last_reply=0, rtt=0, sent=0, recv=0 )
+			warn = 0
+			while True:
+				try:
+					hosts[host] = host_ids[ping_id] = dict(
+						ping_id=ping_id, ip=self.resolve(host),
+						last_reply=0, rtt=0, sent=0, recv=0 )
+				except socket.gaierror as err:
+					(log.warn if warn < warn_tries else log.info)\
+						('Unable to resolve name spec: {}'.format(host))
+					warn += 1
+					if warn == warn_tries:
+						log.warn( 'Disabling name-resolver warnings (failures: {}, name'
+							' spec: {}) until next successful name-resolution attempt'.format(warn, host) )
+					sleep(max(interval // 5, 5))
+				else:
+					if warn >= warn_tries:
+						log.warn('Was able to resolve host spec: {} (attempts: {})'.format(host, warn))
+					break
 
 		if not log: log = logging.getLogger(__name__)
 
@@ -116,7 +131,16 @@ class Pinger(object):
 						try: host['ip'] = self.resolve(spec)
 						except socket.gaierror as err:
 							log.warn('Failed to resolve spec: {} (host: {}): {}'.format(spec, host, err))
-						else: del resolve_retry[spec]
+							host['resolve_fails'] = host.get('resolve_fails', 0) + 1
+							if host['resolve_fails'] >= warn_tries:
+								log.error(( 'Failed to resolve host spec {} (host: {}) after {} attempts,'
+									' exiting (so subprocess can be restarted)' ).format(spec, host, warn_tries))
+								# More complex "retry until forever" logic is used on process start,
+								#  so exit here should be performed only once per major (non-transient) failure
+								sys.exit(0)
+						else:
+							host['resolve_fails'] = 0
+							del resolve_retry[spec]
 				if ts > resolve_fixed_deadline:
 					for spec,host in hosts.viewitems():
 						try: host['ip'] = self.resolve(spec)
@@ -143,7 +167,7 @@ class Pinger(object):
 if __name__ == '__main__':
 	signal.signal(signal.SIGQUIT, signal.SIG_IGN)
 	logging.basicConfig()
-	Pinger().start( sys.argv[6:], interval=float(sys.argv[1]),
+	Pinger().start( sys.argv[7:], interval=float(sys.argv[1]),
 		resolve_no_reply=float(sys.argv[2]), resolve_fixed=float(sys.argv[3]),
 		ewma_factor=float(sys.argv[4]), ping_pid=int(sys.argv[5]),
-		log=logging.getLogger('pinger') )
+		warn_tries=int(sys.argv[6]), log=logging.getLogger('pinger') )

@@ -32,7 +32,7 @@ class PingerInterface(Collector):
 			['python', os.path.join(os.path.dirname(__file__), '_ping.py')]
 				+ map(bytes, [ self.conf.interval,
 					self.conf.resolve.no_reply or 0, self.conf.resolve.time or 0,
-					self.conf.ewma_factor, os.getpid() ])
+					self.conf.ewma_factor, os.getpid(), self.conf.resolve.max_retries ])
 				+ self.hosts.keys() )
 		log.debug('Starting pinger subprocess: {}'.format(' '.join(cmd)))
 		self.proc = Popen(cmd, stdout=PIPE)

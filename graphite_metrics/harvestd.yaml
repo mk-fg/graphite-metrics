@@ -16,6 +16,11 @@ collectors:
     resolve:
       no_reply: 30 # re-resolve hostnames after 30 seconds w/o reply
       time: 600 # re-resolve hostnames after fixed 600s intervals
+      # "max_retries" restarts ping subprocess (e.g. to apply changes to
+      #   /etc/hosts or other libc resolver configuration) after N name resolution failures.
+      # Also, if resolver fails even after restart (i.e. on start), disable warnings
+      #  (but issuing a message on next success) after that number of retries.
+      max_retries: 5
     hosts: # explicitly split into ipv4/ipv6 to control how hostnames are resolved
       ipv4:
         # google_com: google.com
