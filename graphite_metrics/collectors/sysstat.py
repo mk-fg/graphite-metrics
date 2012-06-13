@@ -51,10 +51,21 @@ class SADF(Collector):
 
 		# Timestamp
 		try: ts = entry.pop('timestamp')
-		except KeyError: return # happens, no idea what to do with these
+		except KeyError:
+			log.info( 'Detected sysstat entry'
+				' without timestamp, skipping: {!r}'.format(entry) )
+			return # happens, no idea what to do with these
 		interval = ts['interval']
-		ts = (mktime if not ts['utc'] else timegm)\
-			(strptime('{} {}'.format(ts['date'], ts['time']), '%Y-%m-%d %H-%M-%S'))
+		for fmt in '%Y-%m-%d %H-%M-%S', '%Y-%m-%d %H:%M:%S':
+			try:
+				ts = (mktime if not ts['utc'] else timegm)\
+					(strptime('{} {}'.format(ts['date'], ts['time']), fmt))
+			except ValueError: pass
+			else: break
+		else:
+			raise ValueError( 'Unable to process'
+				' sysstat timestamp: {!r} {!r}'.format(ts['date'], ts['time']) )
+
 		# Metrics
 		metrics = list()
 
