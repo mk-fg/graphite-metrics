@@ -51,7 +51,7 @@ class CarbonSocket(Sink):
 		try: self.sock.sendall(packet)
 		except socket.error as err:
 			log.error('Failed to send data to Carbon server: {}'.format(err))
-			self.reconnect(send=send)
+			self.reconnect(send=self.send)
 
 
 sink = CarbonSocket
