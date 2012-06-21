@@ -18,13 +18,13 @@ entry_points.update(
 	for ep_type in ['collectors', 'processors', 'sinks', 'loops'] )
 
 # Error-handling here is to allow package to be built w/o README included
-try: readme = open(os.path.join(pkg_root, 'README.pypi')).read()
+try: readme = open(os.path.join(pkg_root, 'README.txt')).read()
 except IOError: readme = ''
 
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.06.13',
+	version = '12.06.14',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',

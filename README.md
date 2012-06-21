@@ -33,7 +33,7 @@ and confgured via the common configuration mechanism.
 Same for the datapoint sinks (destinations - it doesn't have to be a single
 carbon host), datapoint processors (mangle/rename/filter datapoints) and the
 main loop, which can be replaced with the async (simple case - threads or
-[gevent](http://www.gevent.org/)) or buffering loop.
+gevent) or buffering loop.
 
 Currently supported backends (data destinations, sinks):
 
