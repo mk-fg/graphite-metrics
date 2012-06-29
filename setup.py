@@ -24,7 +24,7 @@ except IOError: readme = ''
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.06.14',
+	version = '12.06.15',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -62,7 +62,7 @@ setup(
 		'sinks.librato_metrics.async': ['gevent'] },
 
 	packages = find_packages(),
-	include_package_data = True,
+	package_data = {'': ['README.txt'], 'graphite_metrics': ['harvestd.yaml']},
+	exclude_package_data = {'': ['README.*']},
 
-	package_data = {'graphite_metrics': ['harvestd.yaml']},
 	entry_points = entry_points )
