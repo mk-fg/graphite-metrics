@@ -164,10 +164,12 @@ class CronJobs(Collector):
 				# log.debug('LINE: {!r}'.format(line))
 				ts, line = line.strip().split(None, 1)
 				ts = calendar.timegm(iso8601.parse_date(ts).utctimetuple())
+				matched = False
 				for ev, regex in self.lines.viewitems():
 					if not regex: continue
 					match = regex.search(line)
 					if match:
+						matched = True
 						job = match.group('job')
 						for alias, regex in self.aliases:
 							group = alias[1:] if alias.startswith('_') else None
@@ -184,6 +186,8 @@ class CronJobs(Collector):
 						except IndexError: value = 1
 						# log.debug('TS: {}, EV: {}, JOB: {}'.format(ts, ev, job))
 						yield Datapoint('cron.tasks.{}.{}'.format(job, ev), 'gauge', value, ts)
+				if not matched:
+					log.debug('Failed to match line: {!r}'.format(line))
 
 
 collector = CronJobs

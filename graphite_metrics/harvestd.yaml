@@ -39,11 +39,11 @@ collectors:
       # - ['locate', '(^|\b)updatedb\b']
       # - ['_script', '/etc/cron\.\w+/*(?P<script>\S+)(\s+|$)']
     lines: # only named regexp groups here are mandatory, all lines are optional
-      init: 'task\[(\d+|-)\]: Queued\b[^:]*: (?P<job>.*)$'
-      start: 'task\[(\d+|-)\]: Started\b[^:]*: (?P<job>.*)$'
-      finish: 'task\[(\d+|-)\]: Finished\b[^:]*: (?P<job>.*)$'
-      duration: 'task\[(\d+|-)\]: Finished \([^):]*\bduration=(?P<val>\d+)[,)][^:]*: (?P<job>.*)$'
-      error: 'task\[(\d+|-)\]: Finished \([^):]*\bstatus=0*[^0]+0*[,)][^:]*: (?P<job>.*)$'
+      init: 'task\[(\d+|-)\]:\s+Queued\b[^:]*: (?P<job>.*)$'
+      start: 'task\[(\d+|-)\]:\s+Started\b[^:]*: (?P<job>.*)$'
+      finish: 'task\[(\d+|-)\]:\s+Finished\b[^:]*: (?P<job>.*)$'
+      duration: 'task\[(\d+|-)\]:\s+Finished \([^):]*\bduration=(?P<val>\d+)[,)][^:]*: (?P<job>.*)$'
+      error: 'task\[(\d+|-)\]:\s+Finished \([^):]*\bstatus=0*[^0]+0*[,)][^:]*: (?P<job>.*)$'
     xattr_name: user.collectd.logtail.pos # used to mark "last position" in sa logs
 
   slabinfo:
