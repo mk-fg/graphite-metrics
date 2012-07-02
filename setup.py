@@ -24,7 +24,7 @@ except IOError: readme = ''
 setup(
 
 	name = 'graphite-metrics',
-	version = '12.07.1',
+	version = '12.07.2',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',

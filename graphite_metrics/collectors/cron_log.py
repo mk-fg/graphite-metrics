@@ -77,7 +77,7 @@ def file_follow( src, open_tail=True,
 
 def file_follow_durable( path,
 		min_dump_interval=10,
-		xattr_name='user.collectd.logtail.pos',
+		xattr_name='user.collectd.logtail.pos', xattr_update=True,
 		**follow_kwz ):
 	'''Records log position into xattrs after reading line every
 			min_dump_interval seconds.
@@ -94,7 +94,9 @@ def file_follow_durable( path,
 	# Try to restore position
 	src = open(path, mode='rb')
 	src_xattr = xattr(src)
-	try: pos = src_xattr[xattr_name]
+	try:
+		if not xattr_name: raise KeyError
+		pos = src_xattr[xattr_name]
 	except KeyError: pos = None
 	if pos:
 		data_len = struct.calcsize('=I')
@@ -122,10 +124,11 @@ def file_follow_durable( path,
 			pos_new = src.tell()
 			if pos != pos_new:
 				pos = pos_new
-				src_xattr[xattr_name] =\
-					struct.pack('=I', pos)\
-					+ struct.pack('=I', len(line))\
-					+ sha1(line).digest()
+				if xattr_update:
+					src_xattr[xattr_name] =\
+						struct.pack('=I', pos)\
+						+ struct.pack('=I', len(line))\
+						+ sha1(line).digest()
 			pos_dump_ts = pos_dump_ts_get(ts)
 		if (yield line.decode('utf-8', 'replace')):
 			tailer.send(StopIteration)
@@ -154,8 +157,8 @@ class CronJobs(Collector):
 
 		for k,v in self.lines.viewitems(): self.lines[k] = re.compile(v)
 		for idx,(k,v) in enumerate(self.aliases): self.aliases[idx] = k, re.compile(v)
-		self.log_tailer = file_follow_durable( src,
-			xattr_name=self.conf.xattr_name, read_interval_min=None )
+		self.log_tailer = file_follow_durable( src, read_interval_min=None,
+			xattr_name=self.conf.xattr_name, xattr_update=not self.conf.debug.dry_run )
 
 	def read(self, _re_sanitize=re.compile('\s+|-')):
 		# Cron
