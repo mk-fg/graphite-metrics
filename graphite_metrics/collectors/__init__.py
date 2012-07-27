@@ -40,7 +40,7 @@ def rate_limit(max_interval=20, sampling=3, f=lambda x: x):
 
 def dev_resolve( major, minor,
 		log_fails=True, _cache = dict(), _cache_time=600 ):
-	ts_now = time()
+	ts_now, dev_cached = time(), False
 	while True:
 		if not _cache: ts = 0
 		else:
@@ -48,7 +48,7 @@ def dev_resolve( major, minor,
 			dev_cached, ts = (None, _cache[None])\
 				if dev not in _cache else _cache[dev]
 		# Update cache, if necessary
-		if ts_now > ts + _cache_time:
+		if ts_now > ts + _cache_time or dev_cached is False:
 			_cache.clear()
 			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
 				link_name = os.path.basename(link)
@@ -61,7 +61,7 @@ def dev_resolve( major, minor,
 		elif log_fails:
 			log.warn( 'Unable to resolve device'
 				' from major/minor numbers: {}:{}'.format(major, minor) )
-		return dev_cached
+		return dev_cached or None
 
 
 class Collector(object):
