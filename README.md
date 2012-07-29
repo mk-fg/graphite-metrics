@@ -78,7 +78,7 @@ But, you really shouldn't do that.
 
 Current-git version can be installed like this:
 
-	% pip install -e 'git://github.com/mk-fg/graphite-metrics.git#egg=graphite-metrics'
+	% pip install 'git+https://github.com/mk-fg/graphite-metrics.git#egg=graphite-metrics'
 
 ### Requirements
 
