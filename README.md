@@ -173,7 +173,7 @@ whole system under some workloads (e.g. memcache servers).
 cgroup data collector processes lots of files, potentially dozens, hundreds or
 even thoursands per collection cycle, which may also cause similar issues.
 
-Special thanks for Marcus Barczak for pointing that out.
+Special thanks to Marcus Barczak for pointing that out.
 
 
 Rationale
