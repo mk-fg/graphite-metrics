@@ -155,54 +155,25 @@ syslog or systemd-journal anyway) might look like this:
 
 And be started like this: `harvestd -c /etc/harvestd.yaml`
 
-Full CLI reference:
+See `harvestd --help` output for a full CLI reference.
 
-	usage: harvestd [-h] [-t host[:port]] [-i seconds] [-e collector]
-	                [-d collector] [-s sink] [-x sink] [-p processor]
-	                [-z processor] [-c path] [-a db-path] [-n] [--debug]
 
-	Collect and dispatch various metrics to destinations.
+Caveats, Stern Warnings and Apocalyptic Prophecies
+--------------------
 
-	optional arguments:
-	  -h, --help            show this help message and exit
-	  -t host[:port], --destination host[:port]
-	                        host[:port] (default port: 2003, can be overidden via
-	                        config file) of sink destination endpoint (e.g. carbon
-	                        linereceiver tcp port, by default).
-	  -i seconds, --interval seconds
-	                        Interval between collecting and sending the
-	                        datapoints.
-	  -e collector, --collector-enable collector
-	                        Enable only the specified metric collectors, can be
-	                        specified multiple times.
-	  -d collector, --collector-disable collector
-	                        Explicitly disable specified metric collectors, can be
-	                        specified multiple times. Overrides --collector-
-	                        enable.
-	  -s sink, --sink-enable sink
-	                        Enable only the specified datapoint sinks, can be
-	                        specified multiple times.
-	  -x sink, --sink-disable sink
-	                        Explicitly disable specified datapoint sinks, can be
-	                        specified multiple times. Overrides --sink-enable.
-	  -p processor, --processor-enable processor
-	                        Enable only the specified datapoint processors, can be
-	                        specified multiple times.
-	  -z processor, --processor-disable processor
-	                        Explicitly disable specified datapoint processors, can
-	                        be specified multiple times. Overrides --processor-
-	                        enable.
-	  -c path, --config path
-	                        Configuration files to process. Can be specified more
-	                        than once. Values from the latter ones override values
-	                        in the former. Available CLI options override the
-	                        values in any config.
-	  -a db-path, --xattr-emulation db-path
-	                        Emulate filesystem extended attributes (used in some
-	                        collectors like sysstat or cron_log), storing per-path
-	                        data in a simple shelve db.
-	  -n, --dry-run         Do not actually send data.
-	  --debug               Verbose operation mode.
+While most stock collectors here pull metrics from /proc once per some interval,
+same as the other tools, be especially wary of the ones that process memory
+metrics, like /proc/slabinfo and cgroup value parsers.
+
+So-called "files" in /proc are actually callbacks in the kernel code, and to get
+consistent reading for the whole slabinfo table, (at least some versions) of the
+kernel have to lock some operations, causing unexpected lags and delays on the
+whole system under some workloads (e.g. memcache servers).
+
+cgroup data collector processes lots of files, potentially dozens, hundreds or
+even thoursands per collection cycle, which may also cause similar issues.
+
+Special thanks for Marcus Barczak for pointing that out.
 
 
 Rationale
