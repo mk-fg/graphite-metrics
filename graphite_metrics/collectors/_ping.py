@@ -69,7 +69,7 @@ class Pinger(object):
 					hosts[host] = host_ids[ping_id] = dict(
 						ping_id=ping_id, ip=self.resolve(host),
 						last_reply=0, rtt=0, sent=0, recv=0 )
-				except socket.gaierror as err:
+				except (socket.gaierror, socket.error) as err:
 					(log.warn if warn < warn_tries else log.info)\
 						('Unable to resolve name spec: {}'.format(host))
 					warn += 1
