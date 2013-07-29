@@ -67,7 +67,14 @@ collectors:
       limiting_enabled: true
       max_interval: 30 # cycles
       sampling: 3
+    skip:
+      redundant: true # skip metrics, redundant with other default collectors
+      sections: # optional list of sections in "sadf -j -- -A" output to skip, example: ['disk', 'cpu-load-all']
     xattr_name: user.sa_carbon.pos # used to mark "last position" in sa logs
+
+    # Max timestan to dump with "sadf -j" in seconds.
+    # Use if resulting json is too huge for processing in one go (e.g. ram-wise).
+    max_dump_span: # example: 7200
 
   iptables_counts:
     # Packet/byte counters from iptables/ip6tables.

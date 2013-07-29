@@ -69,6 +69,36 @@ class SADF(Collector):
 		# Metrics
 		metrics = list()
 
+		if self.conf.skip.sections:
+			for k in self.conf.skip.sections:
+				if k in entry: del entry[k]
+				else: log.debug('Section-to-skip {!r} not found in sysstat entry'.format(k))
+		process_redundant = not self.conf.skip.redundant
+
+		if 'cpu-load-all' in entry:
+			for stats in entry.pop('cpu-load-all'):
+				prefix = stats.pop('cpu')
+				if prefix == 'all': continue # can be derived by aggregator/webapp
+				prefix = ['cpu', prefix]
+				metrics.extend((prefix + [k], v) for k,v in stats.viewitems())
+
+		if 'process-and-context-switch' in entry:
+			stats = entry.pop('process-and-context-switch')
+			metrics.append((['misc', 'contextswitch'], stats['cswch']))
+			if process_redundant: # also processed in "stats"
+				metrics.append((['processes', 'forks'], stats['proc']))
+
+		if process_redundant:
+			if 'interrupts' in entry: # with "irq"
+				for stats in entry.pop('interrupts'):
+					if stats['intr'] == 'sum': continue # can be derived by aggregator/webapp
+					metrics.append((['irq', stats['intr'], 'sum'], stats['value']))
+			if 'swap-pages' in entry: # with "memstats"
+				for k,v in entry.pop('swap-pages').viewitems():
+					metrics.append((['memory', 'pages', 'activity', k], v))
+			# if 'memory' in entry: # with "memstats"
+			# if 'hugepages' in entry: # with "memstats"
+
 		if 'disk' in entry:
 			for disk in entry.pop('disk'):
 				dev_sadf = disk['disk-device']
@@ -88,10 +118,22 @@ class SADF(Collector):
 					(prefix + ['bytes_write'], sector_bytes * disk['wr_sec']),
 					(prefix + ['serve_time'], disk['await']),
 					(prefix + ['tps'], disk['tps']) ])
+		# if 'io' in entry: # can be derived by aggregator/webapp
 
 		if 'paging' in entry:
-			stats = entry.pop('paging')
-			metrics.append((['memory', 'pages', 'vm_efficiency'], stats['vmeff-percent']))
+			metrics.append((
+				['memory', 'pages', 'vm_efficiency'],
+				entry.pop('paging')['vmeff-percent'] ))
+			# XXX: lots of redundant metrics here
+
+		if 'queue' in entry:
+			stats = entry.pop('queue')
+			for n in 1, 5, 15:
+				k = 'ldavg-{}'.format(n)
+				metrics.append((['load', k], stats[k]))
+			metrics.extend(
+				(['processes', 'state', k], stats[k])
+				for k in ['runq-sz', 'plist-sz', 'blocked'] )
 
 		if 'kernel' in entry:
 			stats = entry.pop('kernel')
@@ -159,7 +201,6 @@ class SADF(Collector):
 			sa_day = int(sa[2:])
 			try: sa_day = sa_days[sa_day]
 			except KeyError: continue # too old or new
-			sa_ts_to = None # otherwise it's possible to get data for the oldest day in a file
 
 			sa = os.path.join(self.conf.sa_path, sa)
 			log.debug('Processing file: {}'.format(sa))
@@ -179,6 +220,13 @@ class SADF(Collector):
 				if sa_ts_from and sa_ts_from.date() != sa_day.date():
 					log.debug('File xattr timestamp points to the next day, skipping file')
 					continue
+			if not self.conf.max_dump_span: sa_ts_to = None
+			else:
+				# Use 00:00 of sa_day + max_dump_span if there's no xattr
+				ts = sa_ts_from or datetime(sa_day.year, sa_day.month, sa_day.day)
+				sa_ts_to = ts + timedelta(0, self.conf.max_dump_span)
+				# Avoid adding restrictions, if they make no sense anyway
+				if sa_ts_to >= datetime.now(): sa_ts_to = None
 
 			# Get data from sadf
 			sa_cmd = ['sadf', '-jt']
