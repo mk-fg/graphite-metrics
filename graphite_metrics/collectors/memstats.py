@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 
 class MemStats(Collector):
 
+	_warn_hp = True
+
 	@staticmethod
 	def _camelcase_fix( name,
 			_re1=re.compile(r'(.)([A-Z][a-z]+)'),
@@ -37,7 +39,9 @@ class MemStats(Collector):
 		hp_size = table.pop('Hugepagesize:', None)
 		if hp_size and not hp_size.endswith(' kB'): hp_size = None
 		if hp_size: hp_size = int(hp_size[:-3])
-		else: log.warn('Unable to get hugepage size from /proc/meminfo')
+		elif self._warn_hp:
+			log.warn('Unable to get hugepage size from /proc/meminfo')
+			self._warn_hp = False
 		for metric, val in table.viewitems():
 			if metric.startswith('DirectMap'): continue # static info
 			# Name mangling
