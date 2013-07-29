@@ -50,7 +50,7 @@ def dev_resolve( major, minor,
 		# Update cache, if necessary
 		if ts_now > ts + _cache_time or dev_cached is False:
 			_cache.clear()
-			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*')):
+			for link in it.chain(iglob('/dev/mapper/*'), iglob('/dev/sd*'), iglob('/dev/xvd*')):
 				link_name = os.path.basename(link)
 				try: link_dev = os.stat(link).st_rdev
 				except OSError: continue # EPERM, EINVAL
