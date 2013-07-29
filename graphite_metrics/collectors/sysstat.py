@@ -137,7 +137,7 @@ class SADF(Collector):
 
 		if 'power-management' in entry:
 			stats = entry.pop('power-management')
-			for metric in stats['temperature']:
+			for metric in stats.get('temperature', list()):
 				name = ['sensors', 'temperature', metric['device'].replace('.', '_')]
 				if 'number' in metric: name.append(bytes(metric['number']))
 				metrics.append((name, metric['degC']))
