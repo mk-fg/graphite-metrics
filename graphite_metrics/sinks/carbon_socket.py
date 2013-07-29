@@ -24,7 +24,7 @@ class CarbonSocket(Sink):
 		while True:
 			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			try:
-				self.sock.connect(self.conf.host)
+				self.sock.connect(tuple(self.conf.host))
 				log.debug('Connected to Carbon at {}:{}'.format(*self.conf.host))
 				if send: self.sock.sendall(send)
 			except socket.error as err:
