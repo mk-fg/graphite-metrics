@@ -187,11 +187,12 @@ class SADF(Collector):
 		return ts, interval, metrics
 
 
-	def _read(self, ts_to=None, max_past_days=7):
+	def _read(self, ts_to=None):
 		if not ts_to: ts_to = datetime.now()
 
-		sa_days = dict( (ts.day, ts) for ts in
-			((ts_to - timedelta(i)) for i in xrange(max_past_days+1)) )
+		sa_days = dict( (ts.day, ts)
+			for ts in ((ts_to - timedelta(i))
+			for i in xrange(self.conf.skip.older_than_days+1)) )
 		sa_files = sorted(it.ifilter(
 			op.methodcaller('startswith', 'sa'), os.listdir(self.conf.sa_path) ))
 		host = os.uname()[1] # to check vs nodename in data

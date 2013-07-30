@@ -70,6 +70,7 @@ collectors:
     skip:
       redundant: true # skip metrics, redundant with other default collectors
       sections: # optional list of sections in "sadf -j -- -A" output to skip, example: ['disk', 'cpu-load-all']
+      older_than_days: 4 # do not check sysstat logs older than this number of days on each run
     xattr_name: user.sa_carbon.pos # used to mark "last position" in sa logs
 
     # Max timestan to dump with "sadf -j" in seconds.
