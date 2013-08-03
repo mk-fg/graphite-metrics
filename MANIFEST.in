@@ -1,0 +1,2 @@
+include graphite_metrics/harvestd.yaml
+include COPYING README.txt
