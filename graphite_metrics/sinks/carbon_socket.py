@@ -20,21 +20,34 @@ class CarbonSocket(Sink):
 		if not self.conf.debug.dry_run: self.connect()
 
 	def connect(self, send=None):
+		host, port = self.conf.host
 		reconnects = self.conf.max_reconnects
 		while True:
-			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			try:
-				self.sock.connect(tuple(self.conf.host))
-				log.debug('Connected to Carbon at {}:{}'.format(*self.conf.host))
+				addrinfo = list(socket.getaddrinfo(
+					host, port, socket.AF_UNSPEC, socket.SOCK_STREAM ))
+				assert addrinfo, addrinfo
+				while addrinfo:
+					# Try connecting to all of the returned addresses
+					af, socktype, proto, canonname, sa = addrinfo.pop()
+					try:
+						self.sock = socket.socket(af, socktype, proto)
+						self.sock.connect(sa)
+					except socket.error:
+						if not addrinfo: raise
+				log.debug('Connected to Carbon at {}:{}'.format(*sa))
 				if send: self.sock.sendall(send)
-			except socket.error as err:
+
+			except (socket.error, socket.gaierror) as err:
 				if reconnects is not None:
 					reconnects -= 1
 					if reconnects <= 0: raise
-				log.info( 'Failed to connect to'
-					' {0[0]}:{0[1]}: {1}'.format(self.conf.host, err) )
+				if isinstance(err, socket.gaierror):
+					log.info('Failed to resolve host ({!r}): {}'.format(host, err))
+				else: log.info('Failed to connect to {}:{}: {}'.format(host, port, err))
 				if self.conf.reconnect_delay:
 					sleep(max(0, self.conf.reconnect_delay))
+
 			else: break
 
 	def close(self):
