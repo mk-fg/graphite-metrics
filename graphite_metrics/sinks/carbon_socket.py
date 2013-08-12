@@ -24,8 +24,11 @@ class CarbonSocket(Sink):
 		reconnects = self.conf.max_reconnects
 		while True:
 			try:
-				addrinfo = list(socket.getaddrinfo(
-					host, port, socket.AF_UNSPEC, socket.SOCK_STREAM ))
+				try:
+					addrinfo = list(socket.getaddrinfo(
+						host, port, socket.AF_UNSPEC, socket.SOCK_STREAM ))
+				except socket.error as err:
+					raise socket.gaierror(err.message)
 				assert addrinfo, addrinfo
 				while addrinfo:
 					# Try connecting to all of the returned addresses
