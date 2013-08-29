@@ -25,7 +25,7 @@ class CarbonSocket(Sink):
 		while True:
 			try:
 				try:
-					addrinfo = reversed(list(socket.getaddrinfo(
+					addrinfo = list(reversed(socket.getaddrinfo(
 						host, port, socket.AF_UNSPEC, socket.SOCK_STREAM )))
 				except socket.error as err:
 					raise socket.gaierror(err.message)
