@@ -5,7 +5,7 @@ from io import open
 from hashlib import sha256, sha512
 from base64 import b32decode
 from collections import defaultdict
-import os, sys, json, socket, time
+import os, sys, json, socket, time, types
 from . import Collector, Datapoint
 
 from bencode import bencode, bdecode
@@ -59,9 +59,11 @@ class CjdnsPeerStats(Collector):
 	def __init__(self, *argz, **kwz):
 		super(CjdnsPeerStats, self).__init__(*argz, **kwz)
 
-		assert self.conf.peer_id in ['pubkey', 'ipv6'], self.conf.peer_id
 		assert self.conf.filter.direction in\
 			['any', 'incoming', 'outgoing'], self.conf.filter.direction
+
+		if isinstance(self.conf.peer_id, types.StringTypes):
+			self.conf.peer_id = [self.conf.peer_id]
 
 		conf_admin, conf_admin_path = None,\
 			os.path.expanduser(self.conf.cjdnsadmin_conf)
@@ -134,14 +136,17 @@ class CjdnsPeerStats(Collector):
 				else: raise ValueError(self.conf.filter.direction)
 
 			# Generate peer_id value
-			peer_id = peer['publicKey']
-			if peer_id.endswith('.k'): peer_id = peer_id[:-2]
-			if self.conf.peer_id == 'pubkey': pass
-			elif self.conf.peer_id == 'ipv6':
-				if peer_id not in self.peer_ipv6_cache:
-					self.peer_ipv6_cache[peer_id] = pubkey_to_ipv6(peer_id)
-				peer_id = self.peer_ipv6_cache[peer_id]
-			else: raise ValueError(self.conf.peer_id)
+			peer['pubkey'] = peer['publicKey']
+			if peer['pubkey'].endswith('.k'): peer['pubkey'] = peer['pubkey'][:-2]
+			if 'ipv6' in self.conf.peer_id:
+				if peer['pubkey'] not in self.peer_ipv6_cache:
+					self.peer_ipv6_cache[peer['pubkey']] = pubkey_to_ipv6(peer['pubkey'])
+				peer['ipv6'] = self.peer_ipv6_cache[peer['pubkey']]
+			for k in self.conf.peer_id:
+				if k in peer:
+					peer_id = peer[k]
+					break
+			else: raise KeyError(self.conf.peer_id, peer)
 			name = '{}.{}.{{}}'.format(self.conf.prefix, peer_id)
 
 			# Per-peer metrics

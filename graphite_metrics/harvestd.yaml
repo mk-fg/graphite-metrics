@@ -111,7 +111,11 @@ collectors:
     # Requires bencode python module to be installed.
     # Doesn't need/use threaded cjdnsadmin module that comes with it.
     enabled: false # more rare than other stats
-    peer_id: ipv6 # either "pubkey" or "ipv6" - how to represent peer id
+    # How to get peer metric name.
+    # Can be either "pubkey", "ipv6" or whatever key (e.g. "user")
+    #  that cjdns returns or a list of these, to use first one available (e.g. ["user", "ipv6"]).
+    # Note that "pubkey" and "ipv6" keys are synthetic and always available.
+    peer_id: ipv6
     # Path to standard cjdcmd/cjdmaid/cjdnsadmin configuration file,
     #  which should contain address, port and password keys.
     # See https://github.com/cjdelisle/cjdns/blob/master/contrib/python/cjdnsadminmaker.py
