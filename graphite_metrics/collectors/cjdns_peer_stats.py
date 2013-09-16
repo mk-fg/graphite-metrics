@@ -123,19 +123,15 @@ class CjdnsPeerStats(Collector):
 			log.warn('Failed getting cjdns peer stats: {}'.format(err))
 			return
 
-		# Detect and skip older peer duplicates with e.g. different isIncoming
-		pubkey_cache = dict()
+		# Detect peers with 2 links having different isIncoming
+		peers_bidir = dict()
 		for peer in peers:
-			assert isinstance(peer['last'], (int, float, long)), peer['last']
-			ts = pubkey_cache.get(peer['publicKey'], 0)
-			if ts >= peer['last']:
-				if ts == peer['last']: peer['last'] -= 1
-				continue
-			pubkey_cache[peer['publicKey']] = peer['last']
+			val = peers_bidir.get(peer['publicKey'])
+			if val is False: peers_bidir[peer['publicKey']] = True
+			elif val is None: peers_bidir[peer['publicKey']] = False
 
 		ts, peer_states = time.time(), defaultdict(int)
 		for peer in peers:
-			if peer['last'] != pubkey_cache[peer['publicKey']]: continue
 			state = peer['state'].lower()
 			peer_states[state] += 1
 
@@ -146,7 +142,7 @@ class CjdnsPeerStats(Collector):
 				elif self.conf.filter.direction == 'outgoing' and peer['isIncoming']: continue
 				else: raise ValueError(self.conf.filter.direction)
 
-			# Generate peer_id value
+			# Generate metric name
 			pubkey = peer['publicKey']
 			if pubkey.endswith('.k'): pubkey = pubkey[:-2]
 			peer['pubkey'] = pubkey
@@ -160,6 +156,8 @@ class CjdnsPeerStats(Collector):
 					break
 			else: raise KeyError(self.conf.peer_id, peer)
 			name = '{}.{}.{{}}'.format(self.conf.prefix, peer_id)
+			if peers_bidir[peer['publicKey']]:
+				name = name.format('incoming_{}' if peer['isIncoming'] else 'outgoing_{}')
 
 			# Per-peer metrics
 			name_bytes = name.format('bytes_{}')
