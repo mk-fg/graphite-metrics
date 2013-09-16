@@ -123,8 +123,19 @@ class CjdnsPeerStats(Collector):
 			log.warn('Failed getting cjdns peer stats: {}'.format(err))
 			return
 
+		# Detect and skip older peer duplicates with e.g. different isIncoming
+		pubkey_cache = dict()
+		for peer in peers:
+			assert isinstance(peer['last'], (int, float, long)), peer['last']
+			ts = pubkey_cache.get(peer['publicKey'], 0)
+			if ts >= peer['last']:
+				if ts == peer['last']: peer['last'] -= 1
+				continue
+			pubkey_cache[peer['publicKey']] = peer['last']
+
 		ts, peer_states = time.time(), defaultdict(int)
 		for peer in peers:
+			if peer['last'] != pubkey_cache[peer['publicKey']]: continue
 			state = peer['state'].lower()
 			peer_states[state] += 1
 
@@ -136,12 +147,13 @@ class CjdnsPeerStats(Collector):
 				else: raise ValueError(self.conf.filter.direction)
 
 			# Generate peer_id value
-			peer['pubkey'] = peer['publicKey']
-			if peer['pubkey'].endswith('.k'): peer['pubkey'] = peer['pubkey'][:-2]
+			pubkey = peer['publicKey']
+			if pubkey.endswith('.k'): pubkey = pubkey[:-2]
+			peer['pubkey'] = pubkey
 			if 'ipv6' in self.conf.peer_id:
-				if peer['pubkey'] not in self.peer_ipv6_cache:
-					self.peer_ipv6_cache[peer['pubkey']] = pubkey_to_ipv6(peer['pubkey'])
-				peer['ipv6'] = self.peer_ipv6_cache[peer['pubkey']]
+				if pubkey not in self.peer_ipv6_cache:
+					self.peer_ipv6_cache[pubkey] = pubkey_to_ipv6(pubkey)
+				peer['ipv6'] = self.peer_ipv6_cache[pubkey]
 			for k in self.conf.peer_id:
 				if k in peer:
 					peer_id = peer[k]
