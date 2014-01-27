@@ -25,41 +25,54 @@ class Pinger(object):
 		chksum = ~chksum & 0xffff
 		return struct.pack('!H', socket.htons(chksum))
 
-	@staticmethod
-	def resolve(host, family=0, socktype=0, proto=0, flags=0):
+
+	def resolve(self, host, family=0, socktype=0, proto=0, flags=0):
 		try: f, host = host.split(':', 1)
 		except ValueError: pass
 		else:
-			if f == 'v4': family = socket.AF_INET
+			assert f in ['v4', 'v6'], f
+			if f == 'v4':
+				family, sock = socket.AF_INET, self.ipv4
 			elif f == 'v6':
-				raise NotImplementedError('ICMPv6 pinging is not supported yet')
-				family = socket.AF_INET6
-		addrs = set( addr[-1][0] for addr in
+				family, sock = socket.AF_INET6, self.ipv6
+				match = re.search(r'^\[([0-9:a-fA-F]+)\]$', host)
+				if match: host = match.group(1)
+		addrs = set( addrinfo[-1] for addrinfo in
 			socket.getaddrinfo(host, 0, family, socktype, proto, flags) )
-		return random.choice(list(addrs))
+		return sock, random.choice(list(addrs))
 
-
-	def test_link(self, addr, ping_id=0xffff, seq=1):
+	def test_link(self, addrinfo, ping_id=0xffff, seq=0):
 		'Test if it is possible to send packets out at all (i.e. link is not down).'
-		try: self.pkt_send(addr, ping_id, seq)
+		try: self.pkt_send(addrinfo, ping_id, seq)
 		except IOError as err: return False
 		return True
 
-	def pkt_send(self, dst, ping_id, seq):
-		pkt = bytearray(struct.pack('!BBHHH', 8, 0, 0, ping_id, seq))
+	def pkt_send(self, addrinfo, ping_id, seq):
+		sock, addr = addrinfo
+		if sock is self.ipv4: icmp_type = 0x08
+		elif sock is self.ipv6: icmp_type = 0x80
+		else: raise ValueError(sock)
+		pkt = bytearray(struct.pack('!BBHHH', icmp_type, 0, 0, ping_id, seq))
 		pkt[2:4] = self.calculate_checksum(pkt)
-		self.sock.sendto(bytes(pkt), (dst, 1))
+		sock.sendto(bytes(pkt), addr)
 
-	def pkt_recv(self):
-		pkt, src = self.sock.recvfrom(2048)
-		pkt = struct.unpack('!BBHHH', pkt[20:28])
-		if pkt[0] != 0 or pkt[1] != 0: return
-		return src[0], pkt[3], pkt[4] # ip, ping_id, seq
+	def pkt_recv(self, sock):
+		pkt, src = sock.recvfrom(2048)
+		if sock is self.ipv4: rng = slice(20, 28)
+		elif sock is self.ipv6: rng = slice(0, 8)
+		else: raise ValueError(sock)
+		pkt = struct.unpack('!BBHHH', pkt[rng])
+		if sock is self.ipv4 and (pkt[0] != 0 or pkt[1] != 0): return
+		elif sock is self.ipv6 and (pkt[0] != 0x81 or pkt[1] != 0): return
+		return src[0], pkt[3], pkt[4] # addr, ping_id, seq
 
 
 	def start(self, *args, **kws):
-		with closing(socket.socket( socket.AF_INET,
-				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as self.sock:
+		with\
+				closing(socket.socket( socket.AF_INET,
+					socket.SOCK_RAW, socket.getprotobyname('icmp') )) as self.ipv4,\
+				closing(socket.socket( socket.AF_INET6,
+					socket.SOCK_RAW, socket.getprotobyname('ipv6-icmp') )) as self.ipv6:
 			return self._start(*args, **kws)
 
 	def _start( self, host_specs, interval,
@@ -81,8 +94,8 @@ class Pinger(object):
 			warn = warn_ts = 0
 			while True:
 				try:
-					ip = self.resolve(host)
-					if not self.test_link(ip): raise LinkError
+					addrinfo = self.resolve(host)
+					if not self.test_link(addrinfo): raise LinkError
 
 				except (socket.gaierror, socket.error, LinkError) as err:
 					ts = time()
@@ -93,8 +106,8 @@ class Pinger(object):
 							and (warn_repeat is True or ts - warn_ts > warn_repeat)
 					if warn_chk: warn_ts = ts
 					(log.warn if warn_chk else log.info)\
-						( '{}Unable to resolve/send-to name spec: {}'\
-							.format('' if not warn_force else '(STILL) ', host) )
+						( '{}Unable to resolve/send-to name spec: {} ({})'\
+							.format('' if not warn_force else '(STILL) ', host, err) )
 					warn += 1
 					if warn_repeat is not True and warn == warn_tries:
 						log.warn( 'Disabling name-resolver/link-test warnings (failures: {},'
@@ -103,7 +116,7 @@ class Pinger(object):
 
 				else:
 					hosts[host] = host_ids[ping_id] = dict(
-						ping_id=ping_id, ip=ip,
+						ping_id=ping_id, addrinfo=addrinfo,
 						last_reply=0, rtt=0, sent=0, recv=0 )
 					if warn >= warn_tries:
 						log.warn('Was able to resolve host spec: {} (attempts: {})'.format(host, warn))
@@ -125,8 +138,10 @@ class Pinger(object):
 		signal.signal(signal.SIGQUIT, dump)
 
 		### Actual ping-loop
-		poller = epoll()
-		poller.register(self.sock, EPOLLIN)
+		poller, sockets = epoll(), dict()
+		for sock in self.ipv4, self.ipv6:
+			sockets[sock.fileno()] = sock
+			poller.register(sock, EPOLLIN)
 		sys.stdout.write('\n')
 		sys.stdout.flush()
 
@@ -137,9 +152,9 @@ class Pinger(object):
 				try:
 					poll_res = poller.poll(poll_time)
 					if not poll_res or not poll_res[0][1] & EPOLLIN: break
-					pkt = self.pkt_recv()
+					pkt = self.pkt_recv(sockets[poll_res[0][0]])
 					if not pkt: continue
-					ip, ping_id, seq = pkt
+					addr, ping_id, seq = pkt
 				except IOError: continue
 				if not ts_send: continue
 				ts = time()
@@ -153,7 +168,7 @@ class Pinger(object):
 
 			if resolve_retry:
 				for spec, host in resolve_retry.items():
-					try: host['ip'] = self.resolve(spec)
+					try: host['addrinfo'] = self.resolve(spec)
 					except socket.gaierror as err:
 						log.warn('Failed to resolve spec: {} (host: {}): {}'.format(spec, host, err))
 						host['resolve_fails'] = host.get('resolve_fails', 0) + 1
@@ -169,7 +184,7 @@ class Pinger(object):
 
 			if time() > resolve_fixed_deadline:
 				for spec,host in hosts.viewitems():
-					try: host['ip'] = self.resolve(spec)
+					try: host['addrinfo'] = self.resolve(spec)
 					except socket.gaierror: resolve_retry[spec] = host
 				resolve_fixed_deadline = ts + resolve_fixed
 
@@ -181,11 +196,11 @@ class Pinger(object):
 			self.discard_rtts, seq = False, next(seq_gen)
 			for spec, host in hosts.viewitems():
 				if host['last_reply'] < resolve_reply_deadline:
-					try: host['ip'] = self.resolve(spec)
+					try: host['addrinfo'] = self.resolve(spec)
 					except socket.gaierror: resolve_retry[spec] = host
 				send_retries = 30
 				while True:
-					try: self.pkt_send(host['ip'], host['ping_id'], seq)
+					try: self.pkt_send(host['addrinfo'], host['ping_id'], seq)
 					except IOError as err:
 						send_retries -= 1
 						if send_retries == 0:
