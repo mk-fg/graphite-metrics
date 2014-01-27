@@ -41,25 +41,28 @@ class Pinger(object):
 
 	def test_link(self, addr, ping_id=0xffff, seq=1):
 		'Test if it is possible to send packets out at all (i.e. link is not down).'
-		with closing(socket.socket( socket.AF_INET,
-				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as sock:
-			try: self.pkt_send(sock, addr, ping_id, seq)
-			except IOError as err: return False
-			return True
+		try: self.pkt_send(addr, ping_id, seq)
+		except IOError as err: return False
+		return True
 
-	def pkt_send(self, sock, dst, ping_id, seq):
+	def pkt_send(self, dst, ping_id, seq):
 		pkt = bytearray(struct.pack('!BBHHH', 8, 0, 0, ping_id, seq))
 		pkt[2:4] = self.calculate_checksum(pkt)
-		sock.sendto(bytes(pkt), (dst, 1))
+		self.sock.sendto(bytes(pkt), (dst, 1))
 
-	def pkt_recv(self, sock):
-		pkt, src = sock.recvfrom(2048)
+	def pkt_recv(self):
+		pkt, src = self.sock.recvfrom(2048)
 		pkt = struct.unpack('!BBHHH', pkt[20:28])
 		if pkt[0] != 0 or pkt[1] != 0: return
 		return src[0], pkt[3], pkt[4] # ip, ping_id, seq
 
 
-	def start( self, host_specs, interval,
+	def start(self, *args, **kws):
+		with closing(socket.socket( socket.AF_INET,
+				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as self.sock:
+			return self._start(*args, **kws)
+
+	def _start( self, host_specs, interval,
 			resolve_no_reply, resolve_fixed, ewma_factor, ping_pid, log=None,
 			warn_tries=5, warn_repeat=None, warn_delay_k=5, warn_delay_min=5 ):
 		ts = time()
@@ -122,80 +125,78 @@ class Pinger(object):
 		signal.signal(signal.SIGQUIT, dump)
 
 		### Actual ping-loop
-		with closing(socket.socket( socket.AF_INET,
-				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as sock:
-			poller = epoll()
-			poller.register(sock, EPOLLIN)
-			sys.stdout.write('\n')
-			sys.stdout.flush()
+		poller = epoll()
+		poller.register(self.sock, EPOLLIN)
+		sys.stdout.write('\n')
+		sys.stdout.flush()
 
-			ts_send = 0 # when last packet(s) were sent
+		ts_send = 0 # when last packet(s) were sent
+		while True:
 			while True:
-				while True:
-					poll_time = max(0, ts_send + interval - time())
-					try:
-						poll_res = poller.poll(poll_time)
-						if not poll_res or not poll_res[0][1] & EPOLLIN: break
-						pkt = self.pkt_recv(sock)
-						if not pkt: continue
-						ip, ping_id, seq = pkt
-					except IOError: continue
-					if not ts_send: continue
-					ts = time()
-					try: host = host_ids[ping_id]
-					except KeyError: pass
+				poll_time = max(0, ts_send + interval - time())
+				try:
+					poll_res = poller.poll(poll_time)
+					if not poll_res or not poll_res[0][1] & EPOLLIN: break
+					pkt = self.pkt_recv()
+					if not pkt: continue
+					ip, ping_id, seq = pkt
+				except IOError: continue
+				if not ts_send: continue
+				ts = time()
+				try: host = host_ids[ping_id]
+				except KeyError: pass
+				else:
+					host['last_reply'] = ts
+					host['recv'] += 1
+					if not self.discard_rtts:
+						host['rtt'] = host['rtt'] + ewma_factor * (ts - ts_send - host['rtt'])
+
+			if resolve_retry:
+				for spec, host in resolve_retry.items():
+					try: host['ip'] = self.resolve(spec)
+					except socket.gaierror as err:
+						log.warn('Failed to resolve spec: {} (host: {}): {}'.format(spec, host, err))
+						host['resolve_fails'] = host.get('resolve_fails', 0) + 1
+						if host['resolve_fails'] >= warn_tries:
+							log.error(( 'Failed to resolve host spec {} (host: {}) after {} attempts,'
+								' exiting (so subprocess can be restarted)' ).format(spec, host, warn_tries))
+							# More complex "retry until forever" logic is used on process start,
+							#  so exit here should be performed only once per major (non-transient) failure
+							sys.exit(0)
 					else:
-						host['last_reply'] = ts
-						host['recv'] += 1
-						if not self.discard_rtts:
-							host['rtt'] = host['rtt'] + ewma_factor * (ts - ts_send - host['rtt'])
+						host['resolve_fails'] = 0
+						del resolve_retry[spec]
 
-				if resolve_retry:
-					for spec, host in resolve_retry.items():
-						try: host['ip'] = self.resolve(spec)
-						except socket.gaierror as err:
-							log.warn('Failed to resolve spec: {} (host: {}): {}'.format(spec, host, err))
-							host['resolve_fails'] = host.get('resolve_fails', 0) + 1
-							if host['resolve_fails'] >= warn_tries:
-								log.error(( 'Failed to resolve host spec {} (host: {}) after {} attempts,'
-									' exiting (so subprocess can be restarted)' ).format(spec, host, warn_tries))
-								# More complex "retry until forever" logic is used on process start,
-								#  so exit here should be performed only once per major (non-transient) failure
-								sys.exit(0)
-						else:
-							host['resolve_fails'] = 0
-							del resolve_retry[spec]
+			if time() > resolve_fixed_deadline:
+				for spec,host in hosts.viewitems():
+					try: host['ip'] = self.resolve(spec)
+					except socket.gaierror: resolve_retry[spec] = host
+				resolve_fixed_deadline = ts + resolve_fixed
 
-				if time() > resolve_fixed_deadline:
-					for spec,host in hosts.viewitems():
-						try: host['ip'] = self.resolve(spec)
-						except socket.gaierror: resolve_retry[spec] = host
-					resolve_fixed_deadline = ts + resolve_fixed
+			if ping_pid:
+				try: os.kill(ping_pid, 0)
+				except OSError: sys.exit()
 
-				if ping_pid:
-					try: os.kill(ping_pid, 0)
-					except OSError: sys.exit()
-
-				resolve_reply_deadline = time() - resolve_no_reply
-				self.discard_rtts, seq = False, next(seq_gen)
-				for spec, host in hosts.viewitems():
-					if host['last_reply'] < resolve_reply_deadline:
-						try: host['ip'] = self.resolve(spec)
-						except socket.gaierror: resolve_retry[spec] = host
-					send_retries = 30
-					while True:
-						try: self.pkt_send(sock, host['ip'], host['ping_id'], seq)
-						except IOError as err:
-							send_retries -= 1
-							if send_retries == 0:
-								log.error(( 'Failed sending pings from socket to host spec {}'
-										' (host: {}) attempts ({}), killing pinger (so it can be restarted).' )\
-									.format(spec, host, err))
-								sys.exit(0) # same idea as with resolver errors abolve
-							continue
-						else: break
-						host['sent'] += 1
-				ts_send = time() # used to calculate rtt's
+			resolve_reply_deadline = time() - resolve_no_reply
+			self.discard_rtts, seq = False, next(seq_gen)
+			for spec, host in hosts.viewitems():
+				if host['last_reply'] < resolve_reply_deadline:
+					try: host['ip'] = self.resolve(spec)
+					except socket.gaierror: resolve_retry[spec] = host
+				send_retries = 30
+				while True:
+					try: self.pkt_send(host['ip'], host['ping_id'], seq)
+					except IOError as err:
+						send_retries -= 1
+						if send_retries == 0:
+							log.error(( 'Failed sending pings from socket to host spec {}'
+									' (host: {}) attempts ({}), killing pinger (so it can be restarted).' )\
+								.format(spec, host, err))
+							sys.exit(0) # same idea as with resolver errors abolve
+						continue
+					else: break
+					host['sent'] += 1
+			ts_send = time() # used to calculate rtt's
 
 
 if __name__ == '__main__':
