@@ -115,7 +115,7 @@ class Pinger(object):
 			ts = time()
 			try:
 				for spec, host in hosts.viewitems():
-					sys.stdout.write('{} {} {} {}\n'.format(
+					sys.stdout.write('{} {:.10f} {:.10f} {:010d}\n'.format(
 						spec, ts - host['last_reply'], host['rtt'],
 						max(host['sent'] - host['recv'] - 1, 0) )) # 1 pkt can be in-transit
 					if host['sent'] > 2**30: host['sent'] = host['recv'] = 0
