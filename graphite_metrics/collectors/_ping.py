@@ -65,10 +65,7 @@ class Pinger(object):
 				if ping_id not in hosts: break
 			warn = 0
 			while True:
-				try:
-					hosts[host] = host_ids[ping_id] = dict(
-						ping_id=ping_id, ip=self.resolve(host),
-						last_reply=0, rtt=0, sent=0, recv=0 )
+				try: ip = self.resolve(host)
 				except (socket.gaierror, socket.error) as err:
 					(log.warn if warn < warn_tries else log.info)\
 						('Unable to resolve name spec: {}'.format(host))
@@ -78,6 +75,9 @@ class Pinger(object):
 							' spec: {}) until next successful name-resolution attempt'.format(warn, host) )
 					sleep(max(interval // 5, 5))
 				else:
+					hosts[host] = host_ids[ping_id] = dict(
+						ping_id=ping_id, ip=ip,
+						last_reply=0, rtt=0, sent=0, recv=0 )
 					if warn >= warn_tries:
 						log.warn('Was able to resolve host spec: {} (attempts: {})'.format(host, warn))
 					break
@@ -157,9 +157,17 @@ class Pinger(object):
 					if host['last_reply'] < resolve_reply_deadline:
 						try: host['ip'] = self.resolve(spec)
 						except socket.gaierror: resolve_retry[spec] = host
+					send_retries = 30
 					while True:
 						try: self.pkt_send(sock, host['ip'], host['ping_id'], seq)
-						except IOError: continue
+						except IOError as err:
+							send_retries -= 1
+							if send_retries == 0:
+								log.error(( 'Failed to ping host spec {} (host: {})'
+										' attempts ({}), killing pinger (so it can be restarted).' )\
+									.format(spec, host, err))
+								sys.exit(0) # same idea as with resolver errors abolve
+							continue
 						else: break
 						host['sent'] += 1
 
