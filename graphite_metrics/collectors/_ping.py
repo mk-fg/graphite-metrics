@@ -9,6 +9,8 @@ from time import time, sleep
 import os, sys, socket, struct, random, signal, re, logging
 
 
+class LinkError(Exception): pass
+
 class Pinger(object):
 
 	@staticmethod
@@ -37,6 +39,14 @@ class Pinger(object):
 		return random.choice(list(addrs))
 
 
+	def test_link(self, addr, ping_id=0xffff, seq=1):
+		'Test if it is possible to send packets out at all (i.e. link is not down).'
+		with closing(socket.socket( socket.AF_INET,
+				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as sock:
+			try: self.pkt_send(sock, addr, ping_id, seq)
+			except IOError as err: return False
+			return True
+
 	def pkt_send(self, sock, dst, ping_id, seq):
 		pkt = bytearray(struct.pack('!BBHHH', 8, 0, 0, ping_id, seq))
 		pkt[2:4] = self.calculate_checksum(pkt)
@@ -63,14 +73,15 @@ class Pinger(object):
 		hosts, host_ids = dict(), dict()
 		for host in host_specs:
 			while True:
-				ping_id = random.randint(0, 0xffff)
-				if ping_id not in hosts: break
+				ping_id = random.randint(0, 0xfffe)
+				if ping_id not in host_ids: break
 			warn = warn_ts = 0
 			while True:
 				try:
 					ip = self.resolve(host)
+					if not self.test_link(ip): raise LinkError
 
-				except (socket.gaierror, socket.error) as err:
+				except (socket.gaierror, socket.error, LinkError) as err:
 					ts = time()
 					if warn < warn_tries:
 						warn_force, warn_chk = False, True
@@ -79,12 +90,12 @@ class Pinger(object):
 							and (warn_repeat is True or ts - warn_ts > warn_repeat)
 					if warn_chk: warn_ts = ts
 					(log.warn if warn_chk else log.info)\
-						( '{}Unable to resolve name spec: {}'\
+						( '{}Unable to resolve/send-to name spec: {}'\
 							.format('' if not warn_force else '(STILL) ', host) )
 					warn += 1
 					if warn_repeat is not True and warn == warn_tries:
-						log.warn( 'Disabling name-resolver warnings (failures: {}, name'
-							' spec: {}) until next successful name-resolution attempt'.format(warn, host) )
+						log.warn( 'Disabling name-resolver/link-test warnings (failures: {},'
+							' name spec: {}) until next successful attempt'.format(warn, host) )
 					sleep(max(interval / float(warn_delay_k), warn_delay_min))
 
 				else:
@@ -118,11 +129,10 @@ class Pinger(object):
 			sys.stdout.write('\n')
 			sys.stdout.flush()
 
-			ts_send = time() - interval
+			ts_send = 0 # when last packet(s) were sent
 			while True:
-				ts = time()
 				while True:
-					poll_time = max(0, ts_send + interval - ts)
+					poll_time = max(0, ts_send + interval - time())
 					try:
 						poll_res = poller.poll(poll_time)
 						if not poll_res or not poll_res[0][1] & EPOLLIN: break
@@ -130,6 +140,7 @@ class Pinger(object):
 						if not pkt: continue
 						ip, ping_id, seq = pkt
 					except IOError: continue
+					if not ts_send: continue
 					ts = time()
 					try: host = host_ids[ping_id]
 					except KeyError: pass
@@ -155,7 +166,7 @@ class Pinger(object):
 							host['resolve_fails'] = 0
 							del resolve_retry[spec]
 
-				if ts > resolve_fixed_deadline:
+				if time() > resolve_fixed_deadline:
 					for spec,host in hosts.viewitems():
 						try: host['ip'] = self.resolve(spec)
 						except socket.gaierror: resolve_retry[spec] = host
@@ -165,8 +176,7 @@ class Pinger(object):
 					try: os.kill(ping_pid, 0)
 					except OSError: sys.exit()
 
-				ts_send += interval
-				resolve_reply_deadline = ts - resolve_no_reply
+				resolve_reply_deadline = time() - resolve_no_reply
 				self.discard_rtts, seq = False, next(seq_gen)
 				for spec, host in hosts.viewitems():
 					if host['last_reply'] < resolve_reply_deadline:
@@ -178,13 +188,14 @@ class Pinger(object):
 						except IOError as err:
 							send_retries -= 1
 							if send_retries == 0:
-								log.error(( 'Failed to ping host spec {} (host: {})'
-										' attempts ({}), killing pinger (so it can be restarted).' )\
+								log.error(( 'Failed sending pings from socket to host spec {}'
+										' (host: {}) attempts ({}), killing pinger (so it can be restarted).' )\
 									.format(spec, host, err))
 								sys.exit(0) # same idea as with resolver errors abolve
 							continue
 						else: break
 						host['sent'] += 1
+				ts_send = time() # used to calculate rtt's
 
 
 if __name__ == '__main__':
