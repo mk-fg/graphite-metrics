@@ -50,30 +50,43 @@ class Pinger(object):
 
 
 	def start( self, host_specs, interval,
-			resolve_no_reply, resolve_fixed, ewma_factor, ping_pid,
-			log=None, warn_tries=5 ):
+			resolve_no_reply, resolve_fixed, ewma_factor, ping_pid, log=None,
+			warn_tries=5, warn_repeat=None, warn_delay_k=5, warn_delay_min=5 ):
 		ts = time()
 		seq_gen = it.chain.from_iterable(it.imap(xrange, it.repeat(2**15)))
 		resolve_fixed_deadline = ts + resolve_fixed
 		resolve_retry = dict()
 		self.discard_rtts = False
+		if not log: log = logging.getLogger(__name__)
 
+		### First resolve all hosts, waiting for it, if necessary
 		hosts, host_ids = dict(), dict()
 		for host in host_specs:
 			while True:
 				ping_id = random.randint(0, 0xffff)
 				if ping_id not in hosts: break
-			warn = 0
+			warn = warn_ts = 0
 			while True:
-				try: ip = self.resolve(host)
+				try:
+					ip = self.resolve(host)
+
 				except (socket.gaierror, socket.error) as err:
-					(log.warn if warn < warn_tries else log.info)\
-						('Unable to resolve name spec: {}'.format(host))
+					ts = time()
+					if warn < warn_tries:
+						warn_force, warn_chk = False, True
+					else:
+						warn_force, warn_chk = True, warn_repeat\
+							and (warn_repeat is True or ts - warn_ts > warn_repeat)
+					if warn_chk: warn_ts = ts
+					(log.warn if warn_chk else log.info)\
+						( '{}Unable to resolve name spec: {}'\
+							.format('' if not warn_force else '(STILL) ', host) )
 					warn += 1
-					if warn == warn_tries:
+					if warn_repeat is not True and warn == warn_tries:
 						log.warn( 'Disabling name-resolver warnings (failures: {}, name'
 							' spec: {}) until next successful name-resolution attempt'.format(warn, host) )
-					sleep(max(interval // 5, 5))
+					sleep(max(interval / float(warn_delay_k), warn_delay_min))
+
 				else:
 					hosts[host] = host_ids[ping_id] = dict(
 						ping_id=ping_id, ip=ip,
@@ -82,8 +95,7 @@ class Pinger(object):
 						log.warn('Was able to resolve host spec: {} (attempts: {})'.format(host, warn))
 					break
 
-		if not log: log = logging.getLogger(__name__)
-
+		### Handler to emit results on-demand
 		def dump(sig, frm):
 			self.discard_rtts = True # make sure results won't be tainted by this delay
 			ts = time()
@@ -96,12 +108,13 @@ class Pinger(object):
 				sys.stdout.write('\n')
 				sys.stdout.flush()
 			except IOError: sys.exit()
+		signal.signal(signal.SIGQUIT, dump)
 
+		### Actual ping-loop
 		with closing(socket.socket( socket.AF_INET,
 				socket.SOCK_RAW, socket.getprotobyname('icmp') )) as sock:
 			poller = epoll()
 			poller.register(sock, EPOLLIN)
-			signal.signal(signal.SIGQUIT, dump)
 			sys.stdout.write('\n')
 			sys.stdout.flush()
 
@@ -141,11 +154,13 @@ class Pinger(object):
 						else:
 							host['resolve_fails'] = 0
 							del resolve_retry[spec]
+
 				if ts > resolve_fixed_deadline:
 					for spec,host in hosts.viewitems():
 						try: host['ip'] = self.resolve(spec)
 						except socket.gaierror: resolve_retry[spec] = host
 					resolve_fixed_deadline = ts + resolve_fixed
+
 				if ping_pid:
 					try: os.kill(ping_pid, 0)
 					except OSError: sys.exit()
@@ -175,7 +190,10 @@ class Pinger(object):
 if __name__ == '__main__':
 	signal.signal(signal.SIGQUIT, signal.SIG_IGN)
 	logging.basicConfig()
+	# Inputs
 	Pinger().start( sys.argv[7:], interval=float(sys.argv[1]),
 		resolve_no_reply=float(sys.argv[2]), resolve_fixed=float(sys.argv[3]),
 		ewma_factor=float(sys.argv[4]), ping_pid=int(sys.argv[5]),
-		warn_tries=int(sys.argv[6]), log=logging.getLogger('pinger') )
+		warn_tries=int(sys.argv[6]), log=logging.getLogger('pinger'),
+		warn_repeat=8 * 3600, warn_delay_k=5, warn_delay_min=5 )
+	# Outputs on SIGQUIT: "host_spec time_since_last_reply rtt_median sent-recvd"
