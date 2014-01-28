@@ -10,7 +10,7 @@ collectors:
     # debug: # auto-filled from global "debug" section, if not specified
 
   ping:
-    # Reports average (ewma) rtt of icmp ping to each specified host.
+    # Reports average (ewma) rtt of icmp ping to each specified host and packet loss (if any).
     interval: 5 # seconds between sending-out pings
     ewma_factor: 0.3 # ewma factor for rtt values
     resolve:

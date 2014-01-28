@@ -52,19 +52,28 @@ class Pinger(object):
 		if sock is self.ipv4: icmp_type = 0x08
 		elif sock is self.ipv6: icmp_type = 0x80
 		else: raise ValueError(sock)
-		pkt = bytearray(struct.pack('!BBHHH', icmp_type, 0, 0, ping_id, seq))
+		ts = time()
+		ts_secs = int(ts)
+		ts_usecs = int((ts - ts_secs) * 1e6)
+		# Timestamp is packed in wireshark-friendly format
+		# Using time.clock() would probably be better here,
+		#  as it should work better with time corrections (by e.g. ntpd)
+		pkt = bytearray(struct.pack( '!BBHHHII',
+			icmp_type, 0, 0, ping_id, seq, ts_secs, ts_usecs ))
 		pkt[2:4] = self.calculate_checksum(pkt)
 		sock.sendto(bytes(pkt), addr)
 
 	def pkt_recv(self, sock):
+		# None gets returned in cases when we get whatever other icmp thing
 		pkt, src = sock.recvfrom(2048)
-		if sock is self.ipv4: rng = slice(20, 28)
-		elif sock is self.ipv6: rng = slice(0, 8)
+		if sock is self.ipv4: start = 20
+		elif sock is self.ipv6: start = 0
 		else: raise ValueError(sock)
-		pkt = struct.unpack('!BBHHH', pkt[rng])
+		try: pkt = struct.unpack('!BBHHHII', pkt[start:start + 16])
+		except struct.error: return
 		if sock is self.ipv4 and (pkt[0] != 0 or pkt[1] != 0): return
 		elif sock is self.ipv6 and (pkt[0] != 0x81 or pkt[1] != 0): return
-		return src[0], pkt[3], pkt[4] # addr, ping_id, seq
+		return src[0], pkt[3], pkt[4], pkt[5] + (pkt[6] / 1e6) # addr, ping_id, seq, ts
 
 
 	def start(self, *args, **kws):
@@ -145,7 +154,7 @@ class Pinger(object):
 		sys.stdout.write('\n')
 		sys.stdout.flush()
 
-		ts_send = 0 # when last packet(s) were sent
+		ts_send = 0 # when last packet(s) were sent out
 		while True:
 			while True:
 				poll_time = max(0, ts_send + interval - time())
@@ -154,7 +163,7 @@ class Pinger(object):
 					if not poll_res or not poll_res[0][1] & EPOLLIN: break
 					pkt = self.pkt_recv(sockets[poll_res[0][0]])
 					if not pkt: continue
-					addr, ping_id, seq = pkt
+					addr, ping_id, seq, ts_pkt = pkt
 				except IOError: continue
 				if not ts_send: continue
 				ts = time()
@@ -164,7 +173,7 @@ class Pinger(object):
 					host['last_reply'] = ts
 					host['recv'] += 1
 					if not self.discard_rtts:
-						host['rtt'] = host['rtt'] + ewma_factor * (ts - ts_send - host['rtt'])
+						host['rtt'] = host['rtt'] + ewma_factor * (ts - ts_pkt - host['rtt'])
 
 			if resolve_retry:
 				for spec, host in resolve_retry.items():
@@ -207,11 +216,11 @@ class Pinger(object):
 							log.error(( 'Failed sending pings from socket to host spec {}'
 									' (host: {}) attempts ({}), killing pinger (so it can be restarted).' )\
 								.format(spec, host, err))
-							sys.exit(0) # same idea as with resolver errors abolve
+							sys.exit(0) # same idea as with resolver errors above
 						continue
 					else: break
 					host['sent'] += 1
-			ts_send = time() # used to calculate rtt's
+			ts_send = time() # used to calculate when to send next batch of pings
 
 
 if __name__ == '__main__':
@@ -223,4 +232,5 @@ if __name__ == '__main__':
 		ewma_factor=float(sys.argv[4]), ping_pid=int(sys.argv[5]),
 		warn_tries=int(sys.argv[6]), log=logging.getLogger('pinger'),
 		warn_repeat=8 * 3600, warn_delay_k=5, warn_delay_min=5 )
-	# Outputs on SIGQUIT: "host_spec time_since_last_reply rtt_median sent-recvd"
+	# Output on SIGQUIT: "host_spec time_since_last_reply rtt_median pkt_lost"
+	#  pkt_lost is a counter ("sent - received" for whole runtime)
