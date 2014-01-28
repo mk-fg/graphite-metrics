@@ -44,8 +44,7 @@ class Pinger(object):
 	def test_link(self, addrinfo, ping_id=0xffff, seq=0):
 		'Test if it is possible to send packets out at all (i.e. link is not down).'
 		try: self.pkt_send(addrinfo, ping_id, seq)
-		except IOError as err: return False
-		return True
+		except IOError as err: raise LinkError(str(err))
 
 	def pkt_send(self, addrinfo, ping_id, seq):
 		sock, addr = addrinfo
@@ -104,7 +103,7 @@ class Pinger(object):
 			while True:
 				try:
 					addrinfo = self.resolve(host)
-					if not self.test_link(addrinfo): raise LinkError
+					self.test_link(addrinfo)
 
 				except (socket.gaierror, socket.error, LinkError) as err:
 					ts = time()
@@ -114,9 +113,11 @@ class Pinger(object):
 						warn_force, warn_chk = True, warn_repeat\
 							and (warn_repeat is True or ts - warn_ts > warn_repeat)
 					if warn_chk: warn_ts = ts
+					err_info = type(err).__name__
+					if str(err): err_info += ': {}'.format(err)
 					(log.warn if warn_chk else log.info)\
 						( '{}Unable to resolve/send-to name spec: {} ({})'\
-							.format('' if not warn_force else '(STILL) ', host, err) )
+							.format('' if not warn_force else '(STILL) ', host, err_info) )
 					warn += 1
 					if warn_repeat is not True and warn == warn_tries:
 						log.warn( 'Disabling name-resolver/link-test warnings (failures: {},'
