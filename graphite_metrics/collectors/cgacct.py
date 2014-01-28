@@ -275,6 +275,7 @@ class CGAcct(Collector):
 			_name = 'processes.services.{}.memory.{}'.format ):
 		for svc, svc_instances in self._systemd_sticky_instances('memory', services):
 			vals = dict()
+
 			for path in self._cg_svc_metrics('memory', 'stat', svc_instances):
 				try:
 					with self._cg_metric(path) as src:
@@ -287,6 +288,17 @@ class CGAcct(Collector):
 							if k not in vals: vals[k] = val
 							else: vals[k] += val
 				except (OSError, IOError): pass
+
+			for prefix in None, 'kmem', 'memsw':
+				k = '{}.usage_in_bytes' if prefix else 'usage_in_bytes'
+				name = 'usage'
+				if prefix: name += '_' + prefix
+				for path in self._cg_svc_metrics('memory', k, svc_instances):
+					try:
+						with self._cg_metric(path) as src:
+							val, k = int(src.read().strip()), (_name(svc, name), 'gauge')
+					except (OSError, IOError): pass
+
 			for (name, val_type), val in vals.viewitems():
 				yield Datapoint(name, val_type, val, None)
 
