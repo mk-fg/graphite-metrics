@@ -296,7 +296,7 @@ class CGAcct(Collector):
 				for path in self._cg_svc_metrics('memory', k, svc_instances):
 					try:
 						with self._cg_metric(path) as src:
-							val, k = int(src.read().strip()), (_name(svc, name), 'gauge')
+							vals[_name(svc, name), 'gauge'] = int(src.read().strip())
 					except (OSError, IOError): pass
 
 			for (name, val_type), val in vals.viewitems():
