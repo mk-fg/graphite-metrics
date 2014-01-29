@@ -205,6 +205,9 @@ sinks:
       max_chunk_size: 500
       max_concurrent_requests: 10 # 0 or false to remove this limit
 
+  # dump: # just logs all the datapoints with level=INFO for testing purposes
+  #   enabled: true
+
 
 loop:
   name: basic # entry point name to use, only one loop can be used
