@@ -76,36 +76,39 @@ class Collector(object):
 
 
 class Datapoint(namedtuple('Value', 'name type value ts')):
+
+	# These are globals
 	_counter_cache = dict()
 	_counter_cache_check_ts = 0
-	_counter_cache_check_timeout = 12 * 3600
-	_counter_cache_check_count = 4
+	_counter_cache_check_timeout = 12 * 3600 # 12h
+	_counter_cache_check_count = 4 # cleanup will trigger every timeout/count period
 
-	def _counter_cache_cleanup(self, ts, to):
+	@classmethod
+	def _counter_cache_cleanup(cls, ts_min):
 		cleanup_list = list( k for k,(v,ts_chk) in
-			self._counter_cache.viewitems() if (ts - to) > ts_chk )
+			cls._counter_cache.viewitems() if ts_min > ts_chk )
 		log.debug('Counter cache cleanup: {} buckets'.format(len(cleanup_list)))
-		for k in cleanup_list: del self._counter_cache[k]
+		for k in cleanup_list: del cls._counter_cache[k]
 
 	def get(self, ts=None, prefix=None):
 		ts = self.ts or ts or time()
 		if ts > Datapoint._counter_cache_check_ts:
-			self._counter_cache_cleanup( ts,
-				self._counter_cache_check_timeout )
+			Datapoint._counter_cache_cleanup(
+				ts - Datapoint._counter_cache_check_timeout )
 			Datapoint._counter_cache_check_ts = ts\
-				+ self._counter_cache_check_timeout\
-				/ self._counter_cache_check_count
+				+ Datapoint._counter_cache_check_timeout\
+				/ Datapoint._counter_cache_check_count
 		if self.type == 'counter':
-			if self.name not in self._counter_cache:
+			if self.name not in Datapoint._counter_cache:
 				log.debug('Initializing bucket for new counter: {}'.format(self.name))
-				self._counter_cache[self.name] = self.value, ts
+				Datapoint._counter_cache[self.name] = self.value, ts
 				return None
-			v0, ts0 = self._counter_cache[self.name]
+			v0, ts0 = Datapoint._counter_cache[self.name]
 			if ts == ts0:
 				log.warn('Double-poll of a counter for {!r}'.format(self.name))
 				return None
 			value = float(self.value - v0) / (ts - ts0)
-			self._counter_cache[self.name] = self.value, ts
+			Datapoint._counter_cache[self.name] = self.value, ts
 			if value < 0:
 				# TODO: handle overflows properly, w/ limits
 				log.debug( 'Detected counter overflow'
