@@ -58,6 +58,8 @@ def main():
 			' data in a simple shelve db.')
 	parser.add_argument('-n', '--dry-run',
 		action='store_true', help='Do not actually send data.')
+	parser.add_argument('--debug-memleaks', action='store_true',
+		help='Import guppy and enable its manhole to debug memleaks (requires guppy module).')
 	parser.add_argument('--debug',
 		action='store_true', help='Verbose operation mode.')
 	optz = parser.parse_args()
@@ -76,6 +78,12 @@ def main():
 			def exception(self, *argz, **kwz): self.error(*argz, **kwz)
 		logging.setLoggerClass(NoTBLogger)
 	log = logging.getLogger(__name__)
+
+	# Manholes
+	if optz.debug_memleaks:
+		import guppy
+		from guppy.heapy import Remote
+		Remote.on()
 
 	# Fill "auto-detected" blanks in the configuration, CLI overrides
 	try:

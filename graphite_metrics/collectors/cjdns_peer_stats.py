@@ -53,8 +53,15 @@ class PeerStatsFailure(Exception):
 		if err is not None: msg += ': {} {}'.format(type(err), err)
 		super(PeerStatsFailure, self).__init__(msg)
 
+	def __hash__(self):
+		return hash(self.message)
+
 
 class CjdnsPeerStats(Collector):
+
+	last_err = None
+	last_err_count = None # None (pre-init), True (shut-up mode) or int
+	last_err_count_max = 3 # max repeated errors to report
 
 	def __init__(self, *argz, **kwz):
 		super(CjdnsPeerStats, self).__init__(*argz, **kwz)
@@ -119,9 +126,23 @@ class CjdnsPeerStats(Collector):
 
 	def read(self):
 		try: peers = self.get_peer_stats()
+		# PeerStatsFailure errors' reporting is rate-limited
 		except PeerStatsFailure as err:
+			if hash(err) == hash(self.last_err):
+				if self.last_err_count is True: return
+				elif self.last_err_count < self.last_err_count_max: self.last_err_count += 1
+				else:
+					log.warn( 'Failed getting cjdns peer stats:'
+						' {} -- disabling reporting of recurring errors'.format(err) )
+					self.last_err_count = True
+					return
+			else: self.last_err, self.last_err_count = err, 1
 			log.warn('Failed getting cjdns peer stats: {}'.format(err))
 			return
+		else:
+			if self.last_err_count is True:
+				log.warn('Previous recurring failure ({}) was resolved'.format(self.last_err))
+				self.last_err = self.last_err_count = None
 
 		# Detect peers with 2 links having different isIncoming
 		peers_bidir = dict()

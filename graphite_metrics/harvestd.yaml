@@ -10,7 +10,7 @@ collectors:
     # debug: # auto-filled from global "debug" section, if not specified
 
   ping:
-    # Reports average (ewma) rtt of icmp ping to each specified host.
+    # Reports average (ewma) rtt of icmp ping to each specified host and packet loss (if any).
     interval: 5 # seconds between sending-out pings
     ewma_factor: 0.3 # ewma factor for rtt values
     resolve:
@@ -204,6 +204,9 @@ sinks:
       enabled:
       max_chunk_size: 500
       max_concurrent_requests: 10 # 0 or false to remove this limit
+
+  # dump: # just logs all the datapoints with level=INFO for testing purposes
+  #   enabled: true
 
 
 loop:

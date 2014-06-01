@@ -15,8 +15,6 @@ class PingerInterface(Collector):
 
 	def __init__(self, *argz, **kwz):
 		super(PingerInterface, self).__init__(*argz, **kwz)
-		if self.conf.hosts.ipv6:
-			raise NotImplementedError('ICMPv6 pinging is not supported yet')
 		self.hosts = dict(it.chain(
 			( ('v4:{}'.format(spec), name)
 				for name, spec in (self.conf.hosts.ipv4 or dict()).viewitems() ),
