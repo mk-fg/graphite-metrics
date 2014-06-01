@@ -15,7 +15,9 @@ Includes separate data collection components ("collectors") for processing of:
 * Cron log to produce start/finish events and duration for each job into a
 	separate metrics, adapts jobs to metric names with regexes.
 * Per-system-service accounting using
-	[systemd](http://www.freedesktop.org/wiki/Software/systemd) and it's cgroups.
+	[systemd](http://www.freedesktop.org/wiki/Software/systemd) and it's cgroups
+	("Default...Accounting=" options in system.conf have to be enabled for more
+	recent versions).
 * [sysstat](http://sebastien.godard.pagesperso-orange.fr/) data from sadc logs
 	(use something like `sadc -F -L -S DISK -S XDISK -S POWER 60` to have more
 	stuff logged there) via sadf binary and it's json export (`sadf -j`, supported
