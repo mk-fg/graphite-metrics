@@ -4,6 +4,7 @@ import itertools as it, operator as op, functools as ft
 from collections import deque
 from contextlib import contextmanager
 from io import open
+from os.path import join, ismount
 import os, re, dbus, fcntl, stat
 
 from . import Collector, Datapoint, user_hz, dev_resolve
@@ -18,7 +19,7 @@ class CGAcct(Collector):
 	def __init__(self, *argz, **kwz):
 		super(CGAcct, self).__init__(*argz, **kwz)
 
-		self.stuck_list = os.path.join(self.conf.cg_root, 'sticky.cgacct')
+		self.stuck_list = join(self.conf.cg_root, 'sticky.cgacct')
 
 		# Check which info is available, if any
 		self.rc_collectors = list()
@@ -28,8 +29,8 @@ class CGAcct(Collector):
 				log.warn( 'Unable to find processor'
 					' method for rc {!r} metrics, skipping it'.format(rc) )
 				continue
-			rc_path = os.path.join(self.conf.cg_root, rc)
-			if not os.path.ismount(rc_path + '/'):
+			rc_path = join(self.conf.cg_root, rc)
+			if not ismount(rc_path + '/'):
 				log.warn(( 'Specified rc path ({}) does not'
 					' seem to be a mountpoint, skipping it' ).format(rc_path))
 				continue
@@ -53,14 +54,14 @@ class CGAcct(Collector):
 
 
 	def _cg_svc_dir(self, rc, svc=None):
-		path = os.path.join(self.conf.cg_root, rc)
+		path = join(self.conf.cg_root, rc, self.conf.systemd_prefix)
 		if not svc: return path
 		svc = svc.rsplit('@', 1)
-		return os.path.join(path, 'system/{}.service'.format(svc[0] + '@'), svc[1])\
-			if len(svc) > 1 else os.path.join(path, 'system/{}.service'.format(svc[0]))
+		return join(path, '{}.service'.format(svc[0] + '@'), svc[1])\
+			if len(svc) > 1 else join(path, '{}.service'.format(svc[0]))
 
 	def _cg_svc_metrics(self, rc, metric, svc_instances):
-		return (os.path.join( self._cg_svc_dir(rc, svc),
+		return (join( self._cg_svc_dir(rc, svc),
 			'{}.{}'.format(rc, metric) ) for svc in svc_instances)
 
 	@contextmanager
@@ -90,7 +91,7 @@ class CGAcct(Collector):
 		# Process services, make their cgroups persistent
 		for svc in list(services):
 			if svc not in stuck:
-				svc_tasks = os.path.join(self._cg_svc_dir(rc, svc), 'tasks')
+				svc_tasks = join(self._cg_svc_dir(rc, svc), 'tasks')
 				try:
 					os.chmod( svc_tasks,
 						stat.S_IMODE(os.stat(svc_tasks).st_mode) | stat.S_ISVTX )
@@ -107,7 +108,7 @@ class CGAcct(Collector):
 			except OSError:
 				log.debug( 'Non-empty cgroup for'
 					' not-running service ({}): {}'.format(svc, svc_dir) )
-				svc_tasks = os.path.join(svc_dir, 'tasks')
+				svc_tasks = join(svc_dir, 'tasks')
 				try:
 					os.chmod( svc_tasks,
 						stat.S_IMODE(os.stat(svc_tasks).st_mode) & ~stat.S_ISVTX )
@@ -243,9 +244,9 @@ class CGAcct(Collector):
 			for base in it.imap(ft.partial(
 					self._cg_svc_dir, 'blkio' ), svc_instances):
 				try:
-					with self._cg_metric(os.path.join(base, 'tasks')) as src:
+					with self._cg_metric(join(base, 'tasks')) as src:
 						tids.update(self._read_ids(src)) # just to count them
-					with self._cg_metric(os.path.join(base, 'cgroup.procs')) as src:
+					with self._cg_metric(join(base, 'cgroup.procs')) as src:
 						pids.update(self._read_ids(src))
 				except (OSError, IOError): continue
 			# Process/thread count - only collected here

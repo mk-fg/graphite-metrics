@@ -55,6 +55,7 @@ collectors:
   cgacct:
     # Accounting of cpu/mem/io for systemd-created per-service cgroups.
     cg_root: /sys/fs/cgroup
+    systemd_prefix: system.slice # was just "system" for older versions
     resource_controllers: ['cpuacct', 'memory', 'blkio'] # mapped to methods in cgacct.py
 
   sysstat:
