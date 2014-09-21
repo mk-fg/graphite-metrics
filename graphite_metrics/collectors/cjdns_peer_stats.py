@@ -8,10 +8,99 @@ from collections import defaultdict
 import os, sys, json, socket, time, types
 from . import Collector, Datapoint
 
-from bencode import bencode, bdecode
-
 import logging
 log = logging.getLogger(__name__)
+
+
+### For bencode bits below
+# Different from vanilla bencode in handling "leading zeroes" in keys
+# Derived from a thing under BitTorrent Open Source License
+# Written by Petru Paler
+
+def _ns_class(cls_name, cls_parents, cls_attrs):
+	for k, v in cls_attrs.viewitems():
+		if isinstance(v, types.FunctionType):
+			cls_attrs[k] = classmethod(v)
+	return type(cls_name, cls_parents, cls_attrs)
+
+class BTEError(Exception): pass
+
+class Bencached(object):
+	__slots__ = 'bencoded',
+	def __init__(self, s): self.bencoded = s
+
+class BTE(object):
+	__metaclass__ = _ns_class
+
+	def decode_int(cls, x, f):
+		f += 1
+		newf = x.index('e', f)
+		n = int(x[f:newf])
+		if x[f] == '-':
+			if x[f + 1] == '0': raise ValueError
+		elif x[f] == '0' and newf != f+1: raise ValueError
+		return (n, newf+1)
+	def decode_string(cls, x, f):
+		colon = x.index(':', f)
+		n = int(x[f:colon])
+		# if x[f] == '0' and colon != f+1: raise ValueError -- cjdns-specific mod
+		colon += 1
+		return (x[colon:colon+n], colon+n)
+	def decode_list(cls, x, f):
+		r, f = [], f+1
+		while x[f] != 'e':
+			v, f = cls.decode_func[x[f]](cls, x, f)
+			r.append(v)
+		return (r, f + 1)
+	def decode_dict(cls, x, f):
+		r, f = {}, f+1
+		while x[f] != 'e':
+			k, f = cls.decode_string(x, f)
+			r[k], f = cls.decode_func[x[f]](cls, x, f)
+		return (r, f + 1)
+	decode_func = dict(l=decode_list, d=decode_dict, i=decode_int)
+	for n in xrange(10): decode_func[bytes(n)] = decode_string
+
+	def encode_bencached(cls, x, r): r.append(x.bencoded)
+	def encode_int(cls, x, r): r.extend(('i', str(x), 'e'))
+	def encode_bool(cls, x, r):
+		if x: BTE.encode_int(cls, 1, r)
+		else: BTE.encode_int(cls, 0, r)
+	def encode_string(cls, x, r): r.extend((str(len(x)), ':', x))
+	def encode_list(cls, x, r):
+		r.append('l')
+		for i in x: cls.encode_func[type(i)](cls, i, r)
+		r.append('e')
+	def encode_dict(cls, x, r):
+		r.append('d')
+		ilist = x.items()
+		ilist.sort()
+		for k, v in ilist:
+			r.extend((str(len(k)), ':', k))
+			cls.encode_func[type(v)](cls, v, r)
+		r.append('e')
+	encode_func = {
+		Bencached: encode_bencached,
+		types.IntType: encode_int,
+		types.LongType: encode_int,
+		types.StringType: encode_string,
+		types.ListType: encode_list,
+		types.TupleType: encode_list,
+		types.DictType: encode_dict,
+		types.BooleanType: encode_bool }
+
+	def bdecode(cls, x):
+		try: r, l = cls.decode_func[x[0]](cls, x, 0)
+		except (IndexError, KeyError, ValueError) as err:
+			raise BTEError('Not a valid bencoded string: {}'.format(err))
+		if l != len(x):
+			raise BTEError('Invalid bencoded value (data after valid prefix)')
+		return r
+
+	def bencode(cls, x):
+		r = []
+		cls.encode_func[type(x)](cls, x, r)
+		return ''.join(r)
 
 
 def pubkey_to_ipv6(key,
@@ -96,8 +185,8 @@ class CjdnsPeerStats(Collector):
 
 	def get_stats_page(self, page, password, bs=2**30):
 		try:
-			self.sock.send(bencode(dict(q='cookie')))
-			cookie = bdecode(self.sock.recv(bs))['cookie']
+			self.sock.send(BTE.bencode(dict(q='cookie')))
+			cookie = BTE.bdecode(self.sock.recv(bs))['cookie']
 		except Exception as err:
 			raise PeerStatsFailure('Failed to get auth cookie', err)
 
@@ -106,11 +195,11 @@ class CjdnsPeerStats(Collector):
 			args=dict(page=page),
 			hash=sha256('{}{}'.format(password, cookie)).hexdigest(),
 			cookie=cookie, txid=os.urandom(5).encode('hex') )
-		req['hash'] = sha256(bencode(req)).hexdigest()
+		req['hash'] = sha256(BTE.bencode(req)).hexdigest()
 
 		try:
-			self.sock.send(bencode(req))
-			resp = bdecode(self.sock.recv(bs))
+			self.sock.send(BTE.bencode(req))
+			resp = BTE.bdecode(self.sock.recv(bs))
 			assert resp.get('txid') == req['txid'], [req, resp]
 			return resp['peers'], resp.get('more', False)
 		except Exception as err:

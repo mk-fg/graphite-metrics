@@ -109,7 +109,6 @@ collectors:
   cjdns_peer_stats:
     # Traffic/state stats for cjdns daemon - https://github.com/cjdelisle/cjdns/
     # Collects these via InterfaceController_peerStats() admin interface call.
-    # Requires bencode python module to be installed.
     # Doesn't need/use threaded cjdnsadmin module that comes with it.
     enabled: false # more rare than other stats
     # How to get peer metric name.

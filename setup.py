@@ -24,7 +24,7 @@ except IOError: readme = ''
 setup(
 
 	name = 'graphite-metrics',
-	version = '14.06.2',
+	version = '14.09.0',
 	author = 'Mike Kazantsev',
 	author_email = 'mk.fraggod@gmail.com',
 	license = 'WTFPL',
@@ -58,7 +58,6 @@ setup(
 		'collectors.cgacct': ['dbus-python'],
 		'collectors.cron_log': ['xattr', 'iso8601'],
 		'collectors.sysstat': ['xattr'],
-		'collectors.cjdns_peer_traffic': ['bencode'],
 		'sinks.librato_metrics': ['requests'],
 		'sinks.librato_metrics.async': ['gevent'] },
 
