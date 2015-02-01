@@ -33,7 +33,7 @@ class PingerInterface(Collector):
 					self.conf.ewma_factor, os.getpid(), self.conf.resolve.max_retries ])
 				+ self.hosts.keys() )
 		log.debug('Starting pinger subprocess: {}'.format(' '.join(cmd)))
-		self.proc = Popen(cmd, stdout=PIPE)
+		self.proc = Popen(cmd, stdout=PIPE, close_fds=True)
 		self.proc.stdout.readline() # wait until it's initialized
 
 	def read(self):
