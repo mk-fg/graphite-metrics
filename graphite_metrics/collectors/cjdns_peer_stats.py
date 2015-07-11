@@ -224,11 +224,16 @@ class CjdnsPeerStats(Collector):
 
 		try:
 			self.sock.send(BTE.bencode(req))
-			resp = BTE.bdecode(self.sock.recv(bs))
-			assert resp.get('txid') == req['txid'], [req, resp]
-			return resp['peers'], resp.get('more', False)
+			for n in xrange(self.conf.recv_retries + 1):
+				resp = BTE.bdecode(self.sock.recv(bs))
+				if resp.get('txid') != req['txid']: # likely timed-out responses to old requests
+					log.warn('Received out-of-order response (n: %s, request: %s): %s', n, req, resp)
+					continue
+				return resp['peers'], resp.get('more', False)
 		except Exception as err:
 			raise PeerStatsFailure('Failure communicating with cjdns', err)
+		raise PeerStatsFailure( 'Too many bogus (wrong or no txid) responses'
+			' in a row (count: {}), last req/res: {} / {}'.format(self.conf.recv_retries, req, resp) )
 
 	def get_peer_stats(self):
 		peers, page, more = list(), 0, True

@@ -135,7 +135,8 @@ collectors:
       count: network.services.cjdns.peer_state.total
       # Prefix for counts of peers by state (e.g. "established", "unresponsive", etc).
       count_state: network.services.cjdns.peer_state
-    timeout: 2 # how long to wait for cjdns responses
+    timeout: 8 # how long to wait for cjdns responses
+    recv_retries: 10 # how many responses with wrong txid (likely prev timeouts) to tolerate
 
   # self_profiling: # TODO
   #   main_loop: true
